@@ -1,0 +1,40 @@
+[project]
+name = "qabot"
+version = "0.1.0"
+description = "Exploratory QA agent for CI: parses a diff, exercises affected workflows, reports findings, emits regression tests."
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "httpx>=0.27",
+    "fastapi>=0.111",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.32",
+]
+
+[project.optional-dependencies]
+llm = ["anthropic>=0.40"]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+browser = [
+    "playwright>=1.62.0",
+]
+
+[project.scripts]
+qabot = "qabot.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["qabot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "browser: drives a real Chromium; slow. Deselect with -m 'not browser'.",
+    "live_llm: shells out to the real claude CLI; slow, and skipped unless QABOT_LIVE_LLM is set. Deselect with -m 'not live_llm'.",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
