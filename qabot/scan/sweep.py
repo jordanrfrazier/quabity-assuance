@@ -105,11 +105,19 @@ class Budget(BaseModel):
     -- which does construct the driver -- reads it from here
     (`BrowserDriver(..., timeout_ms=budget.page_timeout_ms)`), so that one `Budget`
     value governs both concerns instead of splitting the decision across two places.
+
+    `settle_timeout_ms`, unlike `page_timeout_ms`, *is* read here: it bounds the wait
+    for network idle between `goto` and the trailing `read` (see `sweep`). A page that
+    polls or holds a websocket open never reaches idle, so this is a ceiling on
+    patience, not a correctness requirement -- the wait is best-effort and a page that
+    exhausts it is still read, just with less certainty that everything it fired has
+    landed.
     """
 
     max_pages: int = 25
     delay_s: float = 1.0
     page_timeout_ms: float = 20000.0
+    settle_timeout_ms: float = 5000.0
 
 
 class PageResult(BaseModel):
@@ -129,6 +137,10 @@ class ScanResult(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     not_visited: list[str] = Field(default_factory=list)
     stopped: str | None = None
+    #: Events the driver's origin filter dropped, summed across every page. Not a
+    #: finding count and not folded into one -- see `sweep` for why summing it there,
+    #: once per page, is the only place that does not double-count it.
+    suppressed: int = 0
 
 
 def _normalize(name: str) -> str:
@@ -323,6 +335,7 @@ def sweep(
     findings: list[Finding] = []
     stopped: str | None = None
     visited: list[str] = []
+    suppressed = 0
 
     for path in discovery.paths:
         if len(pages) >= budget.max_pages:
@@ -335,11 +348,19 @@ def sweep(
             break
 
         observation = driver.execute(Action(kind="browser", params={"op": "goto", "path": path}))
+        # driver._page: BrowserDriver exposes no "wait for this page to settle" query,
+        # and adding one would be a change to shared CI-product code for a scan-only
+        # need -- the same reasoning as the reach into it for `_click_safely` below.
+        # Best-effort and bounded: a page that polls or holds a socket open never
+        # reaches network idle, and that must cost this page some certainty, not the
+        # whole sweep.
+        try:
+            driver._page.wait_for_load_state("networkidle", timeout=budget.settle_timeout_ms)
+        except Exception:  # noqa: BLE001, S110 -- a page that never idles must not fail the sweep
+            pass
         settled = driver.execute(Action(kind="browser", params={"op": "read"}))
         observation = _merge_events(observation, settled)
 
-        # driver._page: BrowserDriver exposes no "what is on this page" query, and
-        # adding one would be a change to shared CI-product code for a scan-only need.
         clicked, click_observations = _click_safely(driver, driver._page)
         # Fold in what each click produced. The driver drained those events into the
         # click's own Observation, so they exist nowhere else by now.
@@ -353,6 +374,8 @@ def sweep(
             id=f"scan:{path}", name=f"open {path}", steps=[Step(intent=f"open {path}")]
         )
         findings.extend(intrinsic_findings(workflow, {0: observation}))
+        events = observation.evidence.get("browser_events") or {}
+        suppressed += int(events.get("suppressed") or 0)
 
         pages.append(
             PageResult(
@@ -391,4 +414,5 @@ def sweep(
         limitations=list(getattr(driver, "limitations", [])),
         not_visited=sorted(set(discovery.paths) - set(visited)),
         stopped=stopped,
+        suppressed=suppressed,
     )

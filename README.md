@@ -71,7 +71,8 @@ Flags: `--out` (default `qabot-scan-report.html`) is where the report is written
 `--max-pages` (default `25`) caps the crawl, `--delay` (default `1.0`) is the seconds
 between page loads, and `--artifacts` (default `qa-artifacts`) is where screenshots land.
 
-The two products share a repository for one reason: the `BrowserDriver` that safely
-drives a real page and the intrinsic oracles it feeds — crashes, console errors, failed
-requests, 5xxs — are the same code in both. Only what selects a page to look at differs:
-a diff-selected workflow for the merge gate, a crawled URL for the scan.
+The two products share a repository for one reason: the intrinsic oracles — crashes,
+console errors, failed requests, 5xxs — are the same code in both, and they are the half
+of this codebase the evaluation vindicated. The merge gate drives an app over HTTP and
+the scan drives it in a real browser, but both grade what comes back with
+`qabot/intrinsics.py`.

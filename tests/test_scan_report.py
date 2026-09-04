@@ -67,6 +67,27 @@ def test_a_real_scan_with_no_findings_says_so_positively() -> None:
     assert "No problems" in html
 
 
+def test_stopping_early_is_never_read_as_a_clean_bill_of_health_either() -> None:
+    """I4: a sweep that reached plenty of pages but stopped early (budget, a 429)
+    must not read as complete just because it visited more than one page. Sound
+    rather than heuristic: `sweep` appends to `visited` on every iteration before the
+    next one can `break`, so `not_visited` is non-empty exactly when `stopped` is not
+    None -- there is no run where this triggers without the sweep actually having
+    been cut short.
+    """
+    result = _result(
+        discovery=Discovery(
+            origin="https://app.test",
+            paths=[f"/p{i}" for i in range(40)],
+            counts={"root": 1, "bundle": 39},
+        ),
+        pages=[PageResult(path="/p0", status=200), PageResult(path="/p1", status=200)],
+        not_visited=[f"/p{i}" for i in range(2, 40)],
+        stopped="the application asked us to slow down (HTTP 429)",
+    )
+    assert NOTHING_CHECKED in render_html(result)
+
+
 def test_findings_are_grouped_by_visitor_impact() -> None:
     html = render_html(
         _result(findings=[_finding("server_error"), _finding("browser_console_error")])
@@ -80,6 +101,37 @@ def test_what_could_not_be_checked_is_always_stated() -> None:
     assert "could not check" in html.lower()
     assert "/deep" in html
     assert "no reset endpoint" in html
+
+
+def test_the_could_not_check_section_renders_even_with_nothing_to_disclose() -> None:
+    """Deferred review item 7: the previous suite had no case where `limitations`,
+    `not_visited` and `stopped` were all empty at once, so the assertion above
+    overstated what it verified -- it never actually exercised the unconditional
+    path. `ANONYMOUS_SCAN_CAVEAT` renders regardless of what the run observed, and
+    this is the run that proves it: nothing else in the section has anything to say.
+    """
+    assert "could not check" in render_html(_result()).lower()
+
+
+def test_robots_exclusions_are_named_not_silently_dropped() -> None:
+    """I9 leak 1: `Discovery.disallowed` used to be carried all the way to the report
+    and never rendered -- a robots-excluded route vanished with no explanation."""
+    result = _result(
+        discovery=Discovery(
+            origin="https://app.test", paths=["/"], counts={"root": 1}, disallowed=["/admin"]
+        )
+    )
+    html = render_html(result)
+    assert "/admin" in html
+    assert "robots.txt" in html
+
+
+def test_suppressed_events_are_disclosed_and_not_blamed_on_the_app() -> None:
+    """I9 leak 2: a suppressed count lived only in a finding's `evidence`, which this
+    report never opens -- for this reader, it did not exist."""
+    html = render_html(_result(suppressed=12))
+    assert "12" in html
+    assert "not counted" in html.lower()
 
 
 def test_the_report_is_self_contained() -> None:

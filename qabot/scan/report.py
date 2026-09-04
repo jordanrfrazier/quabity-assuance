@@ -47,9 +47,15 @@ NOTHING_CHECKED = (
 #: What an anonymous scan can never see, regardless of how thorough it otherwise was.
 #: Stated once, always, independent of `result.limitations` -- those are what *this
 #: particular run* additionally could not do; this is what *no* anonymous run could
-#: ever do, so it cannot be conditioned on anything the run happened to observe.
+#: ever do, so it cannot be conditioned on anything the run happened to observe. That
+#: is also why the one-hop, JS-blind reach of discovery belongs here rather than in a
+#: conditional item next to `not_visited`: it is true of every v1 run regardless of
+#: what that run happened to find, exactly the same argument that keeps the login
+#: caveat here instead of behind an `if`.
 ANONYMOUS_SCAN_CAVEAT = (
-    "Pages behind a login were not reached, and any forms found on the site were not submitted."
+    "Pages behind a login were not reached, and any forms found on the site were not "
+    "submitted. Links written by JavaScript were not followed, and pages more than one "
+    "click from the home page were not reached."
 )
 
 _IMPACT_TITLE: dict[Impact, str] = {
@@ -69,12 +75,24 @@ _IMPACT_BLURB: dict[Impact, str] = {
 def _nothing_checked(result: ScanResult) -> bool:
     """Whether this run is too thin to let "no problems" read as good news.
 
-    Two conditions, not one, because they catch different failures. A sweep can visit
-    every path it was given and still have been given almost nothing (discovery found
-    one route); or discovery can find plenty and the sweep still barely move (budget,
-    a 429, an early crash). Either alone is disqualifying, so this is an `or`.
+    Three conditions, not one, because they catch different failures. A sweep can
+    visit every path it was given and still have been given almost nothing (discovery
+    found one route); or discovery can find plenty and the sweep still barely move
+    (budget, a 429, an early crash) -- and that second failure is caught twice, once
+    directly (`len(result.pages) <= 1`) and once through `result.stopped is not None`,
+    because a run that reached forty routes, visited two, and stopped on a 429 has
+    `len(pages) == 2`, which the first clause does not catch, but did stop early all
+    the same. This third clause is sound rather than heuristic: every loop iteration
+    in `sweep` appends to `visited` before the next one can break, so `not_visited`
+    is non-empty if and only if `stopped` is not None, and `stopped is not None` is
+    therefore exactly "the sweep did not exhaust what discovery gave it". Any one of
+    the three alone is disqualifying, so this is an `or`.
     """
-    return len(result.pages) <= 1 or sum(result.discovery.counts.values()) <= 1
+    return (
+        len(result.pages) <= 1
+        or sum(result.discovery.counts.values()) <= 1
+        or result.stopped is not None
+    )
 
 
 def headline(result: ScanResult) -> str:
@@ -183,11 +201,21 @@ def _pages_section(pages: list[PageResult]) -> str:
 def _not_checked_section(result: ScanResult) -> str:
     """Always rendered. This is not an apology, it is the scope of the claim above it.
 
-    Four sources, none optional: `limitations` (what this run's driver could not do),
+    Six sources, none optional: `limitations` (what this run's driver could not do),
     `not_visited` (what the budget or a stop condition cut short), `stopped` (why the
-    sweep ended early, when it did), and `ANONYMOUS_SCAN_CAVEAT` (what no anonymous
-    scan -- however thorough -- can ever see). Dropping any one of them because it
-    happened to be empty this run is how a report quietly narrows its own honesty.
+    sweep ended early, when it did), `discovery.disallowed` (routes `robots.txt` asked
+    us not to open), `suppressed` (events dropped as another company's, not counted
+    against this app), and `ANONYMOUS_SCAN_CAVEAT` (what no anonymous scan -- however
+    thorough -- can ever see). "None optional" describes the sources consulted, not
+    every line rendered: a source with nothing to say for this run (no disallowed
+    rules, no suppressed events) renders nothing, the same way `not_visited` and
+    `stopped` already did before this list grew -- only `limitations` and
+    `ANONYMOUS_SCAN_CAVEAT` are unconditional, because those two are never empty by
+    construction (a caveat about every run) or benign when empty (an empty
+    limitations list is itself the honest answer). What is not permitted is skipping
+    the *check* -- a source that is empty this run must still be consulted, because
+    the alternative is a report that quietly narrows its own honesty one silent case
+    at a time.
     """
     items: list[str] = []
     for limitation in result.limitations:
@@ -197,6 +225,18 @@ def _not_checked_section(result: ScanResult) -> str:
         items.append(f"<li>Not visited: {paths}</li>")
     if result.stopped:
         items.append(f"<li>Stopped early: {_e(result.stopped)}</li>")
+    if result.discovery.disallowed:
+        rules = ", ".join(_e(d) for d in result.discovery.disallowed)
+        items.append(
+            f"<li>Your site's robots.txt asked crawlers to stay out of {rules}, "
+            f"so those pages were not opened.</li>"
+        )
+    if result.suppressed:
+        items.append(
+            f"<li>{result.suppressed} errors came from other companies' scripts on "
+            "your pages (ads, analytics, embedded widgets) and are not counted above "
+            "-- they are not yours to fix.</li>"
+        )
     items.append(f"<li>{_e(ANONYMOUS_SCAN_CAVEAT)}</li>")
     return (
         '<section class="not-checked"><h2>What I could not check</h2>'

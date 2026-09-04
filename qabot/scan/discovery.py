@@ -68,6 +68,7 @@ UNSAFE_WORDS = (
     "unsubscribe",
     "cancel",
     "checkout",
+    "pay",
     "purchase",
     "billing",
 )

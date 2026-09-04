@@ -28,7 +28,6 @@ import argparse
 from pathlib import Path
 
 import httpx
-from playwright.sync_api import sync_playwright
 
 from qabot.drivers.browser import BrowserDriver
 from qabot.scan.discovery import discover
@@ -42,6 +41,14 @@ _USER_AGENT = "qabot-scan/0.1 (+read-only page loads)"
 
 
 def cmd_scan(args: argparse.Namespace) -> int:
+    # Deferred, not a module-level import: `browser` is an optional extra, and
+    # `qabot/cli.py` imports `cmd_scan` at module scope so that `--help` can list
+    # every subcommand. A top-level `from playwright.sync_api import sync_playwright`
+    # here would make `seed`, `run` and `demo` -- none of which touch a browser --
+    # fail to import on an install without that extra. Same convention as
+    # `cmd_demo_browser` in `qabot/cli.py`.
+    from playwright.sync_api import sync_playwright
+
     origin = args.url.rstrip("/")
     client = httpx.Client(
         headers={"User-Agent": _USER_AGENT},
@@ -70,7 +77,13 @@ def cmd_scan(args: argparse.Namespace) -> int:
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch()
-        page = browser.new_page()
+        # Stock headless Chrome's UA is what every page actually gets: the browser,
+        # not the httpx `client` above, is what loads every page this scan looks at.
+        # Setting `_USER_AGENT` on `client` alone identifies only the pre-fetch that
+        # decides status codes, leaving the app's own logs unable to tell this
+        # traffic apart from an ordinary visitor's.
+        context = browser.new_context(user_agent=_USER_AGENT)
+        page = context.new_page()
         driver = BrowserDriver(
             base_url=origin,
             page=page,
