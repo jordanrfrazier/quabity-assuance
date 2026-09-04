@@ -126,6 +126,10 @@ class BrowserDriver:
         self._shot_counter = 0
         #: The host the app under test is served from -- the whole of the origin rule.
         self._host = urlsplit(self.base_url).hostname
+        #: Every host this app has served us from. The configured one seeds it; a
+        #: redirect adds to it. See `_note_origin` for why this is a set and not a
+        #: constant.
+        self._hosts: set[str] = {self._host} if self._host else set()
         self._clear_events()
         page.on("pageerror", self._guard(self._on_page_error))
         page.on("console", self._guard(self._on_console))
@@ -356,6 +360,34 @@ class BrowserDriver:
             {"url": response.url, "method": response.request.method, "status": response.status},
         )
 
+    def _note_origin(self) -> None:
+        """Record the host actually serving the page as one of the app's own.
+
+        The origin rule drops events from hosts the app's team cannot fix. A host the
+        app itself redirected the browser to fails that description: it is the app,
+        wearing its production name. Called from `_is_noise` -- at judgement time,
+        not after the fact -- because a load-time event (a console.error the page's
+        own inline script raises before `load` fires) is judged *while `goto` is
+        still running*, long before an `_observe` gets a chance to look. `page.url` is
+        already the post-redirect URL by then, so reading it here rather than caching
+        it after the interaction is what makes the very first event from a redirected
+        origin count as the app's own instead of being lost to the race.
+
+        This also covers a client-side route change that swaps origin, for free.
+
+        WHY not a `framenavigated` listener instead, keeping this predicate pure: that
+        event fires for every frame, not just the top one, so an ad in an iframe
+        navigating would add *its* host to the app's own set -- whitelisting exactly
+        what the filter exists to remove. `page.url` is the main frame's URL by
+        definition, so reading it here is immune to that for free.
+        """
+        try:
+            host = urlsplit(self._page.url).hostname
+        except Exception:  # noqa: BLE001 -- a dead page must not lose the event being judged
+            return
+        if host:
+            self._hosts.add(host)
+
     def _is_noise(self, url: str) -> bool:
         """The whole filter, in one predictable pair of rules.
 
@@ -363,10 +395,11 @@ class BrowserDriver:
         else, and suppressing on absent evidence is exactly the guess this filter
         exists to avoid.
         """
+        self._note_origin()
         parts = urlsplit(url or "")
         if parts.path.rsplit("/", 1)[-1].startswith("favicon."):
             return True
-        return bool(parts.hostname) and parts.hostname != self._host
+        return bool(parts.hostname) and parts.hostname not in self._hosts
 
     def _record(self, kind: str, event: dict[str, object]) -> None:
         """Count first, store second.

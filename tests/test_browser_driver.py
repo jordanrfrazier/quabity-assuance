@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import socket
 from collections.abc import Iterator
+from urllib.parse import urlsplit
 
 import pytest
 from fastapi import FastAPI
@@ -395,3 +396,54 @@ def test_a_blocked_step_still_carries_the_page_errors(broken_driver: BrowserDriv
     )
     assert observation.ok is False
     assert "browser_events" in observation.evidence
+
+
+@pytest.fixture(scope="module")
+def redirecting_app() -> Iterator[str]:
+    """One server, reachable under two hostnames, so a redirect can change host
+    without changing port.
+
+    `urlsplit(...).hostname` drops the port, so two `127.0.0.1` ports served by
+    `demo.server.serve()` are indistinguishable to the origin rule -- that was the
+    flaw in this fixture's first draft, caught because the test it produced passed
+    even against the unfixed driver. `localhost` reaches the same `127.0.0.1`-bound
+    server under a hostname `urlsplit` sees as genuinely different, which is exactly
+    what a redirect to a vanity domain looks like from the driver's point of view,
+    with no DNS or `/etc/hosts` entry a test has no business writing.
+    """
+    app = FastAPI()
+
+    @app.get("/landed")
+    def landed() -> HTMLResponse:
+        return HTMLResponse(
+            "<html><body>landed"
+            "<script>console.error('error from the vanity host')</script>"
+            "</body></html>"
+        )
+
+    with serve(app) as url:
+        port = urlsplit(url).port
+
+        @app.get("/redirects-away")
+        def redirects_away() -> Response:
+            return Response(
+                status_code=307, headers={"Location": f"http://localhost:{port}/landed"}
+            )
+
+        yield url
+
+
+def test_events_from_a_host_the_app_redirected_us_to_are_not_third_party(
+    page: Page, redirecting_app: str
+) -> None:
+    """The origin rule exists to drop other people's scripts, not the app's own
+    second domain. An app served from a vanity host it redirects to is still the app."""
+    driver = BrowserDriver(base_url=redirecting_app, page=page)
+
+    observation = driver.execute(
+        Action(kind="browser", params={"op": "goto", "path": "/redirects-away"})
+    )
+
+    events = observation.evidence["browser_events"]
+    assert [e["text"] for e in events["console_errors"]] == ["error from the vanity host"]
+    assert events["suppressed"] == 0
