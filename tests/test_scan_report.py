@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from qabot.models import Finding, Outcome, Severity
+from qabot.drivers.base import Observation
+from qabot.intrinsics import intrinsic_findings
+from qabot.models import Finding, Step, Workflow
 from qabot.scan.discovery import Discovery
 from qabot.scan.report import NOTHING_CHECKED, headline, render_html
 from qabot.scan.sweep import PageResult, ScanResult
@@ -22,16 +24,31 @@ def _result(**overrides) -> ScanResult:
     return ScanResult(**{**base, **overrides})
 
 
-def _finding(oracle: str, name: str = "open /a") -> Finding:
-    return Finding(
-        workflow_id="scan",
-        workflow_name=name,
-        severity=Severity.BUG,
-        outcome=Outcome.FAIL,
-        statement="the page returned a server error",
-        detail="GET /a -> 500",
-        oracle=oracle,
-    )
+#: One Observation per oracle these tests exercise, shaped exactly as the signal that
+#: oracle actually reads -- a 5xx status for `server_error`, a console-error event for
+#: `browser_console_error` -- so `intrinsic_findings` is what produces the Finding,
+#: not the test fabricating one by hand.
+_OBSERVATIONS: dict[str, Observation] = {
+    "server_error": Observation(ok=True, summary="GET /a", evidence={"status": 500}),
+    "browser_console_error": Observation(
+        ok=True,
+        summary="read",
+        evidence={"browser_events": {"console_errors": [{"text": "boom"}]}},
+    ),
+}
+
+
+def _finding(oracle: str, path: str = "/a") -> Finding:
+    """A Finding built the way `sweep` actually builds one: one `Workflow` per page,
+    run through `intrinsic_findings`. C2 found that this pipeline can only ever stamp
+    `workflow_name=f"open {path}"` -- a value the previous version of this test
+    fabricated directly via a `name=` keyword, which is exactly why the tests here
+    never noticed the pipeline could not produce the shape they were asserting on.
+    """
+    workflow = Workflow(id=f"scan:{path}", name=f"open {path}", steps=[Step(intent=f"open {path}")])
+    findings = intrinsic_findings(workflow, {0: _OBSERVATIONS[oracle]})
+    assert len(findings) == 1, f"expected exactly one finding for oracle {oracle!r}: {findings}"
+    return findings[0]
 
 
 def test_a_scan_that_reached_one_page_never_reads_as_a_clean_bill_of_health() -> None:
@@ -87,8 +104,8 @@ def test_headline_never_calls_a_glitch_a_broken_page() -> None:
 def test_headline_pluralizes_the_glitchy_count() -> None:
     two_glitchy = _result(
         findings=[
-            _finding("browser_console_error", name="open /a"),
-            _finding("browser_console_error", name="open /b"),
+            _finding("browser_console_error", path="/a"),
+            _finding("browser_console_error", path="/b"),
         ]
     )
     assert headline(two_glitchy) == "2 pages have problems"
@@ -96,6 +113,6 @@ def test_headline_pluralizes_the_glitchy_count() -> None:
 
 def test_headline_prefers_broken_over_glitchy_when_both_are_present() -> None:
     mixed = _result(
-        findings=[_finding("server_error", name="open /a"), _finding("browser_console_error")]
+        findings=[_finding("server_error", path="/a"), _finding("browser_console_error")]
     )
     assert headline(mixed) == "1 page is broken"

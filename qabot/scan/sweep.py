@@ -171,7 +171,7 @@ def _accessible_name(locator) -> str:
 
 
 def _inside_form(locator) -> bool:
-    """Whether this control sits inside a `<form>`.
+    """Whether this control would submit a `<form>` -- by ancestry or by binding.
 
     This, not the vocabulary, is what actually enforces "no form submission": it does
     not depend on anyone having listed the right word, and a word list alone permits
@@ -179,9 +179,20 @@ def _inside_form(locator) -> bool:
     application we do not own, failing to answer this question must resolve to "yes,
     skip it" -- clicking on the strength of "I could not tell" is the same guess this
     whole module exists to refuse.
+
+    `el.closest('form')` alone is not enough: HTML5's `form` content attribute lets a
+    submit button live *outside* the form it owns (`<button form="f" type="submit">`,
+    ordinary markup for modal dialogs and sticky footers), and such a button is not an
+    ancestor of any `<form>`. `el.form` resolves that attribute the same way the
+    browser does when the button is clicked -- it also covers plain ancestry, since a
+    form-associated element's `.form` is set either way -- so checking `el.form ||
+    el.closest('form')` catches both routes to the same submission. `el.form` is
+    undefined on an element that is not form-associated at all (a `<div
+    role="button">`), where `closest` remains the only signal, which is why both are
+    still checked rather than one replacing the other.
     """
     try:
-        return bool(locator.evaluate("el => !!el.closest('form')"))
+        return bool(locator.evaluate("el => !!(el.form || el.closest('form'))"))
     except Exception:  # noqa: BLE001 -- an unreadable control must never be clicked
         return True
 
@@ -291,11 +302,25 @@ def sweep(
     status_of: Callable[[str], int | None],
     budget: Budget = Budget(),  # noqa: B008 -- nothing in this function mutates the shared default
 ) -> ScanResult:
-    """Visit every discovered path we can afford, and report what the app said."""
+    """Visit every discovered path we can afford, and report what the app said.
+
+    **Findings are graded one page at a time**, each against its own one-step
+    `Workflow(name=f"open {path}")`, rather than once for a single workflow spanning
+    the whole site. `intrinsics._finding` stamps every finding it produces with
+    `workflow_name=workflow.name`, which is correct for the CI product -- there one
+    workflow is one user journey, so "this workflow is broken" is a sentence a reader
+    can act on. A scan has no journeys, only pages, and a single site-wide workflow
+    would stamp every page's findings with the same name, so a report built from it
+    could say a site was broken but never say *which* pages. The trade this makes:
+    cross-page aggregation is lost, so the same console error on three pages becomes
+    three findings instead of one finding with an occurrence count of three. For a
+    reader whose first question is "which pages", that is the right trade -- and it
+    is also what makes `blank_page`'s hand-built finding below (already
+    `workflow_name=f"open {path}"`, since it never went through `intrinsics.py` at
+    all) consistent with the rest instead of the one exception to how findings read.
+    """
     pages: list[PageResult] = []
-    observations: dict[int, Observation] = {}
-    steps: list[Step] = []
-    extra: list[Finding] = []
+    findings: list[Finding] = []
     stopped: str | None = None
     visited: list[str] = []
 
@@ -324,9 +349,11 @@ def sweep(
             after = driver.execute(Action(kind="browser", params={"op": "read"}))
             observation = _merge_events(observation, after)
 
-        index = len(pages)
-        observations[index] = observation
-        steps.append(Step(intent=f"open {path}"))
+        workflow = Workflow(
+            id=f"scan:{path}", name=f"open {path}", steps=[Step(intent=f"open {path}")]
+        )
+        findings.extend(intrinsic_findings(workflow, {0: observation}))
+
         pages.append(
             PageResult(
                 path=path,
@@ -341,9 +368,9 @@ def sweep(
 
         detail = blank_page(observation, status)
         if detail:
-            extra.append(
+            findings.append(
                 Finding(
-                    workflow_id="scan",
+                    workflow_id=f"scan:{path}",
                     workflow_name=f"open {path}",
                     severity=Severity.BUG,
                     outcome=Outcome.FAIL,
@@ -355,9 +382,6 @@ def sweep(
 
         if budget.delay_s:
             time.sleep(budget.delay_s)
-
-    workflow = Workflow(id="scan", name=f"scan of {discovery.origin}", steps=steps)
-    findings = [*intrinsic_findings(workflow, observations), *extra]
 
     return ScanResult(
         origin=discovery.origin,

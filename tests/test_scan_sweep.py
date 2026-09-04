@@ -29,6 +29,11 @@ from qabot.scan.sweep import (
 
 pytestmark = pytest.mark.browser
 
+#: Whether `/formattr`'s form was ever submitted. A module-level list rather than a
+#: fixture return value because `broken_app` yields a bare URL everywhere else, and
+#: changing that shape for one test would ripple through every other test using it.
+FORM_ATTR_POSTS: list[str] = []
+
 
 @pytest.fixture(scope="module")
 def broken_app() -> Iterator[str]:
@@ -71,6 +76,23 @@ def broken_app() -> Iterator[str]:
             "<html><body>"
             "<form><button>Reveal A</button></form>"
             "<button>Reveal B</button>"
+            "</body></html>"
+        )
+
+    @app.post("/submitted")
+    def submitted() -> JSONResponse:
+        FORM_ATTR_POSTS.append("posted")
+        return JSONResponse({"ok": True})
+
+    @app.get("/formattr", response_class=HTMLResponse)
+    def formattr() -> str:
+        """A submit button bound to a form by the HTML5 `form` content attribute,
+        sitting outside it -- ordinary markup for modal and sticky-footer layouts.
+        `el.closest('form')` alone does not see this button; `el.form` does."""
+        return (
+            "<html><body>"
+            '<form id="f" action="/submitted" method="post"></form>'
+            '<button form="f" type="submit">Reveal details</button>'
             "</body></html>"
         )
 
@@ -201,6 +223,23 @@ def test_a_control_inside_a_form_is_skipped_but_an_identical_one_outside_is_clic
     clicked, _ = _click_safely(driver, browser_page)
     assert "Reveal A" not in clicked
     assert "Reveal B" in clicked
+
+
+def test_a_button_bound_to_a_form_by_the_form_attribute_is_not_clicked(
+    broken_app: str, browser_page: Page
+) -> None:
+    """C1: `el.closest('form')` alone missed a submit button wired to its form via
+    the HTML5 `form="id"` attribute rather than by ancestry, and Playwright's click
+    submitted the form -- a real POST landed at the fixture server. Both the click
+    and the request must be refused."""
+    FORM_ATTR_POSTS.clear()
+    driver = BrowserDriver(
+        base_url=broken_app, page=browser_page, reset_path=None, timeout_ms=15000
+    )
+    driver.execute(Action(kind="browser", params={"op": "goto", "path": "/formattr"}))
+    clicked, _ = _click_safely(driver, browser_page)
+    assert "Reveal details" not in clicked
+    assert FORM_ATTR_POSTS == []
 
 
 def test_merge_events_sums_truncated_counts_per_key_instead_of_dropping_them() -> None:
