@@ -31,7 +31,9 @@ Fetch = Callable[[str], "str | None"]
 _ROUTE_RE = re.compile(r'(?:\bpath|\bto)\s*:\s*"(/[^"]*)"')
 _SCRIPT_RE = re.compile(r'<(?:script[^>]+src|link[^>]+rel="modulepreload"[^>]+href)="([^"]+\.js)"')
 _LOC_RE = re.compile(r"<loc>\s*([^<]+?)\s*</loc>")
-_ASSET_RE = re.compile(r"\.(?:js|css|png|jpe?g|svg|gif|ico|woff2?|ttf|map|json|xml|txt|pdf)$", re.IGNORECASE)
+_ASSET_RE = re.compile(
+    r"\.(?:js|css|png|jpe?g|svg|gif|ico|woff2?|ttf|map|json|xml|txt|pdf)$", re.IGNORECASE
+)
 
 #: A path naming one of these is a state change, not a page. We drive applications we
 #: do not own, so the list is deliberately broad and deliberately dumb: a false
