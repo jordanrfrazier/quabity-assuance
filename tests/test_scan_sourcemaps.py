@@ -75,10 +75,12 @@ def test_sources_as_string_does_not_fabricate_filename() -> None:
 
 
 def test_names_as_string_does_not_fabricate_name() -> None:
-    """String names are rejected; name field stays None."""
+    """String names are rejected; file/line recover, name stays None."""
     map_data = {"version": 3, "sources": ["src/cart.ts"], "names": "xyz", "mappings": "AAUAA"}
     sourcemap = json.dumps(map_data)
     fetch = {"https://app.test/b.js.map": sourcemap}.get
     frame = resolve("https://app.test/b.js", line=1, column=0, fetch=fetch)
-    assert frame.resolved is False
-    assert frame.name is None
+    assert frame.resolved is True
+    assert frame.file == "src/cart.ts"
+    assert frame.line == 11
+    assert frame.name is None  # Explicitly check no name was invented

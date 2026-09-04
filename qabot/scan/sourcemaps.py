@@ -109,7 +109,7 @@ def resolve(url: str | None, line: int | None, column: int | None, fetch: Fetch)
             return unresolved
         names = document.get("names") or []
         if not isinstance(names, list):
-            return unresolved
+            names = []  # Recover partial resolution; name will be None
 
         found = _lookup(raw, line - 1, column or 0)
         if found is None:
