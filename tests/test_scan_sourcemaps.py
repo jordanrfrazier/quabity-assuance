@@ -51,3 +51,34 @@ def test_no_location_at_all_is_an_unresolved_frame_not_a_crash() -> None:
     frame = resolve(None, None, None, lambda _: None)
     assert frame.resolved is False
     assert frame.file is None
+
+
+def test_malformed_mappings_type_degrades() -> None:
+    """A non-string mappings field returns unresolved, never raises."""
+    map_data = {"version": 3, "sources": ["src/cart.ts"], "names": [], "mappings": 42}
+    sourcemap = json.dumps(map_data)
+    fetch = {"https://app.test/b.js.map": sourcemap}.get
+    frame = resolve("https://app.test/b.js", line=1, column=0, fetch=fetch)
+    assert frame.resolved is False
+    assert frame.file == "https://app.test/b.js"
+
+
+def test_sources_as_string_does_not_fabricate_filename() -> None:
+    """String sources are rejected; returned file is original URL, not a char."""
+    map_data = {"version": 3, "sources": "abc", "names": [], "mappings": "AAUAA"}
+    sourcemap = json.dumps(map_data)
+    fetch = {"https://app.test/b.js.map": sourcemap}.get
+    frame = resolve("https://app.test/b.js", line=1, column=0, fetch=fetch)
+    assert frame.resolved is False
+    assert frame.file == "https://app.test/b.js"
+    assert frame.file != "a"  # Explicitly check we didn't fabricate
+
+
+def test_names_as_string_does_not_fabricate_name() -> None:
+    """String names are rejected; name field stays None."""
+    map_data = {"version": 3, "sources": ["src/cart.ts"], "names": "xyz", "mappings": "AAUAA"}
+    sourcemap = json.dumps(map_data)
+    fetch = {"https://app.test/b.js.map": sourcemap}.get
+    frame = resolve("https://app.test/b.js", line=1, column=0, fetch=fetch)
+    assert frame.resolved is False
+    assert frame.name is None

@@ -96,22 +96,33 @@ def resolve(url: str | None, line: int | None, column: int | None, fetch: Fetch)
     raw = fetch(url + ".map")
     if raw is None:
         return unresolved
+
     try:
         document = json.loads(raw)
-        found = _lookup(raw, line - 1, column or 0)
-    except (ValueError, KeyError, IndexError):
-        return unresolved
-    if found is None:
-        return unresolved
+        # Type-check: mappings must be a string, sources and names must be lists.
+        # Duck-typing on untrusted data can silently fabricate wrong answers.
+        mappings = document.get("mappings", "")
+        if not isinstance(mappings, str):
+            return unresolved
+        sources = document.get("sources") or []
+        if not isinstance(sources, list):
+            return unresolved
+        names = document.get("names") or []
+        if not isinstance(names, list):
+            return unresolved
 
-    source_i, orig_line, name_i = found
-    sources = document.get("sources") or []
-    names = document.get("names") or []
-    if not 0 <= source_i < len(sources):
+        found = _lookup(raw, line - 1, column or 0)
+        if found is None:
+            return unresolved
+
+        source_i, orig_line, name_i = found
+        if not 0 <= source_i < len(sources):
+            return unresolved
+        return Frame(
+            file=sources[source_i],
+            line=orig_line + 1,
+            name=names[name_i] if 0 <= name_i < len(names) else None,
+            resolved=True,
+        )
+    except Exception:  # noqa: BLE001 -- untrusted third-party source map data
         return unresolved
-    return Frame(
-        file=sources[source_i],
-        line=orig_line + 1,
-        name=names[name_i] if 0 <= name_i < len(names) else None,
-        resolved=True,
-    )
