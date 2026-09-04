@@ -685,6 +685,72 @@ quietly.
 
 ---
 
+## The scan product (2026-09-04)
+
+Design: [2026-09-03-scan-design.md](superpowers/specs/2026-09-03-scan-design.md). Evidence
+in [EVAL.md](EVAL.md).
+
+### D51 — The scan product reuses the oracles and abandons the knowledge base
+**Decided by:** Claude, on the EVAL.md evidence; you approved building it as a second
+product rather than a mode of the first.
+
+The measurement that forced it. Run against real repositories, the expectation tier —
+seeded workflows, graded by provenance-capped `Expectation`s — produced 28 findings across
+CTFd and datasette, and **28 of them were false positives**. The pattern was always the
+same: a seeded assertion is only valid inside the fixtures, configuration and identity of
+the test that produced it, and the knowledge base captures the assertion while discarding
+that context. The intrinsic tier — findings that rest on the application declaring its own
+failure, needing no seeded expectation at all — returned **zero false positives across 120
+routes of two applications** and found two real defects in released software: datasette's
+`assert False` on an unrecognized output format, and CTFd's unguarded `table` query
+parameter in `/admin/export/csv`. One half of this codebase works on code we did not write.
+The other half is 0-for-28. `scan` is the working half, pointed at a buyer the other half
+was never for: someone who built an app — often with an AI — and has no test suite to seed
+from, no fixtures, no `conftest`, and no engineer to read a stack trace. Everything that
+sank the expectation tier is absent by construction, and everything the intrinsic tier
+needs is a URL.
+
+The design consequence. `scan` reuses `qabot/drivers/browser.py`'s `BrowserDriver` and
+`qabot/intrinsics.py` unchanged, and abandons the knowledge base entirely — no `Workflow`,
+no `Expectation`, no seeding, no curator loop. Severity is *derived*, not stored:
+`impact_of` in the new `qabot/scan/grading.py` is a pure lookup on `finding.oracle`, never
+a field written onto a `Finding` and never a match on prose. That keeps `intrinsics.py` and
+`models.py` untouched, so the CI product keeps the epistemic ordering D8 depends on
+(`human_confirmed` → BUG, ..., `inferred_from_code` → QUESTION), and the visitor-impact axis
+this buyer actually needs (BROKEN / GLITCHY / NOTED, ranking a console error above a
+correctly-capped QUESTION) can be re-cut again later without migrating any stored data.
+
+The two `BrowserDriver` changes, and the bug that forced them. I claimed in design
+discussion that `scan` would not touch the driver; that was wrong, and both fixes were
+found against real applications, not imagined.
+
+**(a) The origin filter's noise rule compared every event's host against the host parsed
+out of `base_url` at construction.** Measured on a real app: `snake-survival.lovable.app`
+redirects to `www.snakesurvival.com`, so every console error, failed request and 5xx it
+produced was suppressed as third-party — only its uncaught exception survived, because
+`page_errors` are deliberately exempt from the rule. A vanity domain the app itself
+redirected us to is not a third party, and treating it as one turned the run silently
+empty. Fixed by tracking the *effective* origin: `_hosts` starts as the configured host and
+`_note_origin` adds every host the app has redirected us to during the run, so `_is_noise`
+compares against the set rather than the one name we started with. This makes the CI
+product more correct too — it simply could not surface there, because `base_url` in that
+product is always a server it controls and never redirects away from itself.
+
+**(b) `reset_path` was a plain `str` defaulting to `/reset`, so a scan would have called
+`reset()` and POSTed to a stranger's production server.** `HttpDriver` already took
+`reset_path: str | None` for exactly this reason (`NO_RESET_LIMITATION`); this brought the
+browser driver into line. `scan` always constructs it with `reset_path=None` and states the
+limitation in its report, the same as an `HttpDriver` run against an app with no reset
+endpoint.
+
+The counter-case, honestly. This couples two products to one piece of shared code: a future
+change to `BrowserDriver` for either product's sake must now satisfy both, and a bug fixed
+for one is a bug that was silently live in the other. Both changes above happened to be
+strict improvements with no tradeoff, but the next one may not be, and there is no
+mechanism here beyond the test suite for both products to catch it.
+
+---
+
 ## Open, deferred to you
 
 - **O1 — Model access and billing.** Does the runner proxy through your API with a scoped
