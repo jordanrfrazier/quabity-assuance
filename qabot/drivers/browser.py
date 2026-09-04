@@ -92,6 +92,13 @@ EVENT_EVIDENCE_LIMIT = 20
 #: The event categories captured, and the order they appear in evidence.
 EVENT_KINDS = ("page_errors", "console_errors", "failed_requests", "server_errors")
 
+#: Carried on the run when the caller declared the app has no reset endpoint.
+NO_RESET_LIMITATION = (
+    "the app has no reset endpoint, so pages were visited in sequence against whatever "
+    "state earlier ones left behind: a finding here may depend on that accumulated "
+    "state, and visiting the same pages in another order may not reproduce it"
+)
+
 #: First `http(s)://host/file.js:LINE:COL` in a stack trace. Uncaught exceptions reach
 #: us as a message plus a stack and nothing else, so this is the only way to say where
 #: one came from -- and a "where" is the difference between a report a developer can
@@ -114,7 +121,7 @@ class BrowserDriver:
         page: Page,
         artifacts_dir: Path | None = None,
         timeout_ms: float = 5000.0,
-        reset_path: str = "/reset",
+        reset_path: str | None = "/reset",
     ):
         self.base_url = base_url.rstrip("/")
         self._page = page
@@ -130,6 +137,9 @@ class BrowserDriver:
         #: redirect adds to it. See `_note_origin` for why this is a set and not a
         #: constant.
         self._hosts: set[str] = {self._host} if self._host else set()
+        #: What this driver could not guarantee about the run. The caller reads it and
+        #: the report prints it; opting out of reset is stated, never swallowed.
+        self.limitations: list[str] = [] if reset_path is not None else [NO_RESET_LIMITATION]
         self._clear_events()
         page.on("pageerror", self._guard(self._on_page_error))
         page.on("console", self._guard(self._on_console))
@@ -137,11 +147,20 @@ class BrowserDriver:
         page.on("response", self._guard(self._on_response))
 
     def reset(self) -> None:
-        """Clear server state and start from a blank browser context.
+        """Return the app to a known state, if it has one to return to.
 
-        Loud on failure, for the same reason as the HTTP driver: a run that begins
-        from an unknown state produces findings nobody can act on.
+        Loud on failure, because a run that starts from an unknown state produces
+        findings nobody can trust. That is exactly why opting out is a constructor
+        argument rather than a rescued exception: no third-party app has a `/reset`
+        endpoint, and treating its 404 as "fine" would turn every foreign run into the
+        untrustworthy kind without anyone deciding to. `reset_path=None` is the caller
+        deciding to, once, in the open. Cookies are still cleared -- that is our own
+        browser state, and clearing it asks nothing of the app.
         """
+        if self._reset_path is None:
+            self._page.context.clear_cookies()
+            self._clear_events()
+            return
         try:
             response = self._page.request.post(f"{self.base_url}{self._reset_path}")
         except Exception as exc:  # playwright raises a broad Error type

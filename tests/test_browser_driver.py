@@ -23,7 +23,12 @@ pytest.importorskip("playwright.sync_api")
 
 from playwright.sync_api import Page, sync_playwright
 
-from qabot.drivers.browser import EVENT_EVIDENCE_LIMIT, EVENT_KINDS, BrowserDriver
+from qabot.drivers.browser import (
+    EVENT_EVIDENCE_LIMIT,
+    EVENT_KINDS,
+    NO_RESET_LIMITATION,
+    BrowserDriver,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -157,6 +162,22 @@ def test_reset_is_loud_when_the_endpoint_is_missing(page: Page, shop_url: str) -
     driver = BrowserDriver(base_url=shop_url, page=page, reset_path="/no-such-reset")
     with pytest.raises(DriverError, match="reset failed"):
         driver.reset()
+
+
+def test_reset_without_a_reset_path_issues_no_request_and_states_the_limitation(
+    monkeypatch: pytest.MonkeyPatch, page: Page, shop_url: str
+) -> None:
+    """A scan drives applications we do not own. Opting out is the caller's decision,
+    made once and in the open, and it costs them a stated limitation on the run."""
+    driver = BrowserDriver(base_url=shop_url, page=page, reset_path=None)
+
+    posted: list[str] = []
+    monkeypatch.setattr(page.request, "post", lambda url, **kw: posted.append(url))
+
+    driver.reset()  # must not raise, and must not POST anywhere
+
+    assert posted == []
+    assert NO_RESET_LIMITATION in driver.limitations
 
 
 # -- error signals -----------------------------------------------------------
