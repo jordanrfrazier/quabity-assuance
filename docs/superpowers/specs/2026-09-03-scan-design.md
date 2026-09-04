@@ -103,8 +103,18 @@ Four sources, in descending order of trust:
    from three real bundles.
 2. **`sitemap.xml`**, when present. Authoritative and cheap.
 3. **`robots.txt`** — read for `Sitemap:` directives and honoured for exclusions.
-4. **`a[href]` on every page visited.** The fallback, and on an SPA landing page it finds
-   almost nothing, which is why it cannot be the only source.
+4. **`a[href]` on the root page.** The fallback, and on an SPA landing page it finds almost
+   nothing, which is why it cannot be the only source — but it is the *only* source for a
+   server-rendered site, and one measured app in the spike yielded all four of its pages this
+   way with zero bundle routes and no sitemap.
+
+   **Scoped to one hop, deliberately.** Discovery is a pure, browser-free unit, which is what
+   lets it be tested without Chromium; reading anchors from every page as it is visited would
+   require a live browser and would move the paths list out of `Discovery`, taking the
+   per-source counts with it. So links rendered by JavaScript are not seen, and a page two hops
+   from the root is not reached. Both are real limitations of v1 and are stated in the report
+   rather than papered over. One hop was empirically sufficient for every app measured in the
+   spike.
 
 Discovery is a distinct, separately testable unit: `discover(root_url) -> Discovery`,
 where `Discovery` carries the paths **and the per-source counts**. The counts are not

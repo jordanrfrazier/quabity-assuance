@@ -1557,9 +1557,14 @@ NOTHING_CHECKED = (
   `result.not_visited`, `result.stopped`, and the standing anonymous-scan caveat
   ("pages behind a login were not reached; forms were found but not submitted").
 - Escape all interpolated text with `html.escape`.
-- `headline(result)` returns `"No problems found"` when there are no BROKEN or GLITCHY
-  findings, otherwise `"N page(s) is/are broken"` counting distinct
-  `finding.workflow_name` among BROKEN findings, falling back to a glitch count.
+- `headline(result)` has three branches, each saying only what is true: no BROKEN and no
+  GLITCHY findings → `"No problems found"`; one or more BROKEN → `"N page is broken"` /
+  `"N pages are broken"` counting distinct `finding.workflow_name` among BROKEN findings;
+  zero BROKEN with one or more GLITCHY → `"N page has problems"` / `"N pages have
+  problems"`, counted the same way over GLITCHY. A glitch-only scan must never be
+  headlined as broken — the headline is the one sentence this reader is guaranteed to
+  read, and the Broken/Glitchy split is the whole reason the scan has its own severity
+  axis rather than inheriting the CI product's.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
