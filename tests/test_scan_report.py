@@ -22,10 +22,10 @@ def _result(**overrides) -> ScanResult:
     return ScanResult(**{**base, **overrides})
 
 
-def _finding(oracle: str) -> Finding:
+def _finding(oracle: str, name: str = "open /a") -> Finding:
     return Finding(
         workflow_id="scan",
-        workflow_name="open /a",
+        workflow_name=name,
         severity=Severity.BUG,
         outcome=Outcome.FAIL,
         statement="the page returned a server error",
@@ -75,3 +75,27 @@ def test_the_report_is_self_contained() -> None:
 def test_headline_counts_broken_pages_in_plain_language() -> None:
     assert headline(_result(findings=[_finding("server_error")])) == "1 page is broken"
     assert headline(_result()) == "No problems found"
+
+
+def test_headline_never_calls_a_glitch_a_broken_page() -> None:
+    """BROKEN and GLITCHY are different claims. The headline must not blur them."""
+    one_glitchy = _result(findings=[_finding("browser_console_error")])
+    assert headline(one_glitchy) == "1 page has problems"
+    assert "broken" not in headline(one_glitchy)
+
+
+def test_headline_pluralizes_the_glitchy_count() -> None:
+    two_glitchy = _result(
+        findings=[
+            _finding("browser_console_error", name="open /a"),
+            _finding("browser_console_error", name="open /b"),
+        ]
+    )
+    assert headline(two_glitchy) == "2 pages have problems"
+
+
+def test_headline_prefers_broken_over_glitchy_when_both_are_present() -> None:
+    mixed = _result(
+        findings=[_finding("server_error", name="open /a"), _finding("browser_console_error")]
+    )
+    assert headline(mixed) == "1 page is broken"

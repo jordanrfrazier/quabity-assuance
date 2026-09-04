@@ -80,21 +80,26 @@ def _nothing_checked(result: ScanResult) -> bool:
 def headline(result: ScanResult) -> str:
     """One line, in plain language, for someone who will read nothing else.
 
-    Counts distinct workflow names among BROKEN findings -- pages, not findings,
-    because two BROKEN findings on the same page ("open /a") describe one broken
-    experience, not two, and a reader counting problems on their site does not
-    think in oracle counts. When nothing is BROKEN but something is still GLITCHY,
-    the same "page(s) is/are broken" sentence is used with the glitch count rather
-    than a second sentence shape, so a run with only glitches still gets a headline
-    that says something is wrong instead of falling through to "No problems found".
+    Counts distinct workflow names, not findings, in both the BROKEN and GLITCHY
+    cases: two findings on the same page ("open /a") describe one broken or glitchy
+    experience, not two, and a reader counting problems on their site does not think
+    in oracle counts. The two cases get different sentences on purpose -- BROKEN and
+    GLITCHY are the whole reason this package grades by visitor impact instead of
+    reusing the CI product's severity axis, and a headline that calls a page with a
+    console error "broken" collapses that distinction on the one line every reader is
+    guaranteed to see. "Has/have problems" is deliberately milder than "is/are broken":
+    a page that renders but logs an error or fails a background request is not the
+    same claim as a page that could not be used at all.
     """
     broken_pages = {f.workflow_name for f in result.findings if impact_of(f) is Impact.BROKEN}
-    n = len(broken_pages)
-    if not n:
-        n = sum(1 for f in result.findings if impact_of(f) is Impact.GLITCHY)
-    if not n:
-        return "No problems found"
-    return f"{n} page is broken" if n == 1 else f"{n} pages are broken"
+    if broken_pages:
+        n = len(broken_pages)
+        return f"{n} page is broken" if n == 1 else f"{n} pages are broken"
+    glitchy_pages = {f.workflow_name for f in result.findings if impact_of(f) is Impact.GLITCHY}
+    if glitchy_pages:
+        n = len(glitchy_pages)
+        return f"{n} page has problems" if n == 1 else f"{n} pages have problems"
+    return "No problems found"
 
 
 def _screenshot_data_uri(path: str | None) -> str | None:
