@@ -8,7 +8,23 @@ An SPA ships its router to the browser, so the route table is sitting in the bun
 plain text. That is the highest-trust source available to a stranger, and measurably
 the one that matters: across seven real applications, discovery found between 1 and 32
 routes, and the number of defects found tracked it exactly. Crawling `a[href]` alone
-finds one page on a React landing page, which is why it cannot be the only source.
+finds one page on a React landing page, which is why it cannot be the only source --
+but a server-rendered site with no client router has no bundle at all, and for that
+site `a[href]` is not a supplement, it is the only source there is.
+
+That link-following is deliberately shallow: only the root page's own anchors are
+read, not the anchors on every page discovery goes on to find. Going deeper would
+mean fetching pages breadth-first and feeding each one back through this same
+extraction, which is a small change in shape but a large one in cost -- and it starts
+to blur this module's one hard boundary, that it never touches a browser. `discover`
+takes a `fetch` function and nothing else, which is what makes it exhaustively
+testable without Chromium; a page whose links are written by JavaScript rather than
+present in the served HTML is invisible to it regardless of how many hops it takes,
+because there is no browser here to run that script. One hop past the root was
+enough to recover every page of the field experiment's server-rendered app, so that
+is the line drawn for now -- multi-hop, JS-rendered crawling is a real gap, and it is
+a browser-driving feature for a later version, not a quiet claim this one already
+makes.
 
 The per-source counts are not telemetry. A scan that reached one page and reported no
 problems is not a clean bill of health, and `counts` is how the report tells a reader
@@ -31,6 +47,10 @@ Fetch = Callable[[str], "str | None"]
 _ROUTE_RE = re.compile(r'(?:\bpath|\bto)\s*:\s*"(/[^"]*)"')
 _SCRIPT_RE = re.compile(r'<(?:script[^>]+src|link[^>]+rel="modulepreload"[^>]+href)="([^"]+\.js)"')
 _LOC_RE = re.compile(r"<loc>\s*([^<]+?)\s*</loc>")
+#: `<a href="...">` targets in served HTML -- the source a server-rendered page has
+#: instead of a bundle. Any quoted `href` on an `<a` tag; `followable` does the actual
+#: filtering, so this only needs to find candidates, not judge them.
+_ANCHOR_RE = re.compile(r'<a\s[^>]*?href="([^"]*)"', re.IGNORECASE)
 _ASSET_RE = re.compile(
     r"\.(?:js|css|png|jpe?g|svg|gif|ico|woff2?|ttf|map|json|xml|txt|pdf)$", re.IGNORECASE
 )
@@ -89,6 +109,17 @@ def routes_from_sitemap(xml: str, origin: str) -> set[str]:
     return {p for loc in _LOC_RE.findall(xml) if (p := followable(origin, loc))}
 
 
+def routes_from_anchors(html: str, origin: str) -> set[str]:
+    """Same-origin, safe-to-visit paths named by an `<a href>` in served HTML.
+
+    The only source in this module that reads markup a server actually rendered,
+    rather than a bundle or a sitemap it happens to publish -- which is exactly why
+    it exists: a server-rendered page ships neither of those, and its anchors are the
+    whole of what it tells us about itself.
+    """
+    return {p for href in _ANCHOR_RE.findall(html) if (p := followable(origin, href))}
+
+
 def parse_robots(text: str) -> tuple[list[str], list[str]]:
     """`(disallowed prefixes, sitemap urls)`.
 
@@ -112,13 +143,20 @@ def parse_robots(text: str) -> tuple[list[str], list[str]]:
 def discover(origin: str, fetch: Fetch, max_bundles: int = 6) -> Discovery:
     """Everything the app tells us about itself, with the provenance of each path."""
     origin = origin.rstrip("/")
-    counts = {"bundle": 0, "sitemap": 0, "root": 0}
+    counts = {"bundle": 0, "sitemap": 0, "root": 0, "links": 0}
     paths: set[str] = set()
 
     root = fetch(f"{origin}/")
     if root is not None:
         paths.add("/")
         counts["root"] = 1
+
+    # Only the root page's own anchors -- see the module docstring for why this does
+    # not chase links a level deeper.
+    for path in routes_from_anchors(root or "", origin):
+        if path not in paths:
+            paths.add(path)
+            counts["links"] += 1
 
     robots = fetch(f"{origin}/robots.txt") or ""
     disallowed, sitemaps = parse_robots(robots)

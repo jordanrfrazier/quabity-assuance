@@ -7,6 +7,7 @@ from qabot.scan.discovery import (
     discover,
     followable,
     parse_robots,
+    routes_from_anchors,
     routes_from_bundle,
     routes_from_sitemap,
 )
@@ -61,14 +62,48 @@ def test_discover_records_where_every_path_came_from() -> None:
         f"{ORIGIN}/": '<script src="/a.js"></script>',
         f"{ORIGIN}/a.js": 'r({path:"/dash"})',
         f"{ORIGIN}/robots.txt": "Sitemap: https://example.test/sitemap.xml\nDisallow: /admin\n",
-        f"{ORIGIN}/sitemap.xml": "<urlset><url><loc>https://example.test/pricing</loc></url></urlset>",
+        f"{ORIGIN}/sitemap.xml": (
+            "<urlset><url><loc>https://example.test/pricing</loc></url></urlset>"
+        ),
     }
     found = discover(ORIGIN, lambda url: pages.get(url))
 
     assert isinstance(found, Discovery)
     assert set(found.paths) == {"/", "/dash", "/pricing"}
-    assert found.counts == {"bundle": 1, "sitemap": 1, "root": 1}
+    assert found.counts == {"bundle": 1, "sitemap": 1, "root": 1, "links": 0}
     assert found.disallowed == ["/admin"]
+
+
+def test_anchors_are_recovered_from_served_html() -> None:
+    """A server-rendered page has no bundle at all -- its anchors are the source."""
+    html = '<html><body><a href="/pricing">Pricing</a> <a href="/about">About</a></body></html>'
+    assert routes_from_anchors(html, ORIGIN) == {"/pricing", "/about"}
+
+
+def test_discover_finds_paths_only_reachable_through_a_plain_anchor() -> None:
+    """The case `a[href]` exists for: no script tag, no sitemap, just server HTML."""
+    pages = {f"{ORIGIN}/": '<html><body><a href="/pricing">Pricing</a></body></html>'}
+    found = discover(ORIGIN, lambda url: pages.get(url))
+    assert "/pricing" in found.paths
+    assert found.counts["links"] == 1
+
+
+def test_discover_applies_followable_to_anchors_and_not_just_bundles_and_sitemaps() -> None:
+    """Anchor extraction reuses `followable`, so it refuses exactly what a bundle or
+    sitemap source already refuses -- an offsite link, a destructive-looking path,
+    and an asset -- rather than a second, potentially looser, filter."""
+    pages = {
+        f"{ORIGIN}/": (
+            "<html><body>"
+            '<a href="https://elsewhere.test/x">offsite</a>'
+            '<a href="/logout">Log out</a>'
+            '<a href="/bundle.js">bundle</a>'
+            "</body></html>"
+        )
+    }
+    found = discover(ORIGIN, lambda url: pages.get(url))
+    assert found.paths == ["/"]
+    assert found.counts["links"] == 0
 
 
 def test_discover_honours_robots_disallow() -> None:
