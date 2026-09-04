@@ -751,6 +751,39 @@ mechanism here beyond the test suite for both products to catch it.
 
 ---
 
+### D52 — `sourcemaps.py` stays built and unwired; the report layer's purity is not
+### traded for it in a fix wave
+**Decided by:** the repo owner, on the final whole-branch review's recommendation
+(review finding I7).
+
+`qabot/scan/sourcemaps.py` resolves a minified stack frame back to original file, line
+and symbol, with an honest fallback to the minified frame when it cannot — built exactly
+as spec §5 describes, and tested against its own suite. Nothing calls it. `render_html`
+never receives a resolved frame, so the severity-ceiling problem the spec's §5 opens with
+(the highest-severity signal arriving as `"Wl"`, a mangled symbol) is unfixed in the
+shipped report.
+
+The reason is not an oversight, it is a conflict between two things this branch already
+decided. `report.py`'s docstring states the report is "a pure function of the run" — no
+network, no filesystem beyond an already-captured screenshot path — precisely so it stays
+testable without a browser and without a fixture server. Resolving a source map needs to
+fetch the `.map` file, which is a network call, and the only point in the pipeline that
+already holds a live connection to the app is `sweep`, not `report`. Wiring resolution in
+during a review fix wave would mean choosing, under time pressure, where that fetch
+happens and what report.py's purity claim then means — exactly the kind of design
+decision a fix wave should not make as a side effect of closing a review finding.
+
+So: the module and its tests are left exactly as they are, and the two places that
+claimed otherwise are corrected instead. Spec §5 now states plainly that source-map
+resolution is built and tested but not yet wired into the report, and names the open
+question (most likely home: inside `sweep`, resolving frames as findings are produced, so
+`report.py` keeps receiving already-resolved text and never touches the network itself).
+Spec §7's module table carries the same note next to `sourcemaps.py`. Wiring it is future
+work, scoped as its own change with its own decision about where the fetch lives — not
+retrofitted here.
+
+---
+
 ## Open, deferred to you
 
 - **O1 — Model access and billing.** Does the runner proxy through your API with a scoped

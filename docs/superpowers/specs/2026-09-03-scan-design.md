@@ -212,6 +212,16 @@ file, line and symbol is the difference between a finding a builder can act on a
 Fetch the map for the frame's bundle, resolve, and **fall back to the minified frame with
 that fact stated** — never silently present an unresolved frame as if it were resolved.
 
+**Status: built and tested, not yet wired into the report.** `qabot/scan/sourcemaps.py`
+implements resolution and the honest fallback described above, against its own test
+suite. Connecting it to `render_html` needs network access during rendering to fetch a
+`.map` file, and `report.py` being a pure function of a `ScanResult` — no network, no
+filesystem beyond an already-captured screenshot path — is a stated design property this
+codebase is not breaking to land one feature. Where that fetch belongs (in `sweep`,
+resolving frames as findings are produced, so `report.py` stays pure and receives
+already-resolved text) is an open design question, not a bug in the module as it stands.
+See `docs/DECISIONS.md` D52.
+
 ---
 
 ## 6. Report
@@ -245,6 +255,7 @@ qabot/scan/
   sweep.py       drive one app: budget, safe interactions, evidence collection
   grading.py     oracle -> scan severity; the blank_page oracle
   sourcemaps.py  minified frame -> original file/line/symbol, or an honest failure
+                 (built, tested, not yet wired into the report -- see §5)
   report.py      findings -> a self-contained HTML page
   cli.py         `qabot scan <url> --out report.html`
 ```
