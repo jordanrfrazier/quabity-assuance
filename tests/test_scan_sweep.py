@@ -15,8 +15,17 @@ pytest.importorskip("playwright.sync_api")
 
 from playwright.sync_api import Page, sync_playwright
 
+from qabot.drivers.base import Action, Observation
 from qabot.drivers.browser import BrowserDriver
-from qabot.scan.sweep import Budget, ScanResult, sweep
+from qabot.scan.sweep import (
+    MAX_CLICKS_PER_PAGE,
+    Budget,
+    ScanResult,
+    _click_safely,
+    _merge_events,
+    _safe_to_click,
+    sweep,
+)
 
 pytestmark = pytest.mark.browser
 
@@ -52,6 +61,32 @@ def broken_app() -> Iterator[str]:
             "<button id='t'>Show details</button>"
             "<script>document.getElementById('t')"
             ".addEventListener('click', () => { undefinedFunction(); })</script>"
+            "</body></html>"
+        )
+
+    @app.get("/formguard", response_class=HTMLResponse)
+    def formguard() -> str:
+        """A safely-named control inside a <form>, and an identical one outside it."""
+        return (
+            "<html><body>"
+            "<form><button>Reveal A</button></form>"
+            "<button>Reveal B</button>"
+            "</body></html>"
+        )
+
+    @app.get("/manybuttons", response_class=HTMLResponse)
+    def manybuttons() -> str:
+        """More safe, uniquely-named controls than the per-page click cap allows."""
+        buttons = "".join(f"<button>Item {i}</button>" for i in range(MAX_CLICKS_PER_PAGE + 2))
+        return f"<html><body>{buttons}</body></html>"
+
+    @app.get("/titlechange", response_class=HTMLResponse)
+    def titlechange() -> str:
+        """A title set only after a click -- the pre-click title is stale evidence."""
+        return (
+            "<html><body><button id='t'>Reveal</button>"
+            "<script>document.getElementById('t')"
+            ".addEventListener('click', () => { document.title = 'Revealed'; });</script>"
             "</body></html>"
         )
 
@@ -131,3 +166,75 @@ def test_the_no_reset_limitation_is_carried_onto_the_result(
 ) -> None:
     result = _sweep(broken_app, browser_page, ["/"])
     assert any("reset" in limitation for limitation in result.limitations)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Submit",
+        "Save changes",
+        "Confirm",
+        "Sign in",
+        "Send message",
+        "Post comment",
+        "Pay now",
+        "Add to cart",
+        "Update profile",
+        "Log out",
+        "log-out",
+        "LogOut",
+    ],
+)
+def test_unsafe_click_words_refuse_common_mutating_and_account_actions(name: str) -> None:
+    """Finding A: the vocabulary reused from discovery permitted every one of these."""
+    assert _safe_to_click(name) is False
+
+
+def test_a_control_inside_a_form_is_skipped_but_an_identical_one_outside_is_clicked(
+    broken_app: str, browser_page: Page
+) -> None:
+    """Finding A: the structural guard is what actually enforces "no form submission"."""
+    driver = BrowserDriver(
+        base_url=broken_app, page=browser_page, reset_path=None, timeout_ms=15000
+    )
+    driver.execute(Action(kind="browser", params={"op": "goto", "path": "/formguard"}))
+    clicked, _ = _click_safely(driver, browser_page)
+    assert "Reveal A" not in clicked
+    assert "Reveal B" in clicked
+
+
+def test_merge_events_sums_truncated_counts_per_key_instead_of_dropping_them() -> None:
+    """Finding B: a click's truncation count was silently lost by the catch-all branch."""
+    first = Observation(
+        ok=True, summary="goto", evidence={"browser_events": {"suppressed": 1, "truncated": {}}}
+    )
+    second = Observation(
+        ok=True,
+        summary="click",
+        evidence={"browser_events": {"suppressed": 2, "truncated": {"console_errors": 57}}},
+    )
+    merged = _merge_events(first, second)
+    assert merged.evidence["browser_events"]["suppressed"] == 3
+    assert merged.evidence["browser_events"]["truncated"] == {"console_errors": 57}
+
+
+def test_a_title_set_after_a_click_is_the_title_reported(
+    broken_app: str, browser_page: Page
+) -> None:
+    """Finding C: title/final_url/screenshot were always the stale pre-click snapshot."""
+    result = _sweep(broken_app, browser_page, ["/titlechange"])
+    assert "Reveal" in result.pages[0].clicked
+    assert result.pages[0].title == "Revealed"
+
+
+def test_the_click_cap_is_enforced_and_returns_both_names_and_observations(
+    broken_app: str, browser_page: Page
+) -> None:
+    """Finding D: the early-return on the click cap must not regress to a bare list."""
+    driver = BrowserDriver(
+        base_url=broken_app, page=browser_page, reset_path=None, timeout_ms=15000
+    )
+    driver.execute(Action(kind="browser", params={"op": "goto", "path": "/manybuttons"}))
+    clicked, observations = _click_safely(driver, browser_page)
+    assert len(clicked) == MAX_CLICKS_PER_PAGE
+    assert len(observations) == MAX_CLICKS_PER_PAGE
