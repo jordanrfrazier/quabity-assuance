@@ -1,12 +1,19 @@
 """Command line entry point.
 
-Three commands:
   seed  -- build a knowledge base from a customer's existing e2e suite
   run   -- execute a QA run against a live app and report
   demo  -- the whole pipeline end to end against the bundled buggy shop app
+  scan  -- check a live app you have only the URL of
 
 `demo` is the one to read first. It stands the entire loop up in-process and shows
 the bot grading an application whose defects we planted on purpose.
+
+`scan` is not a fourth mode of the same product. `seed`, `run` and `demo` all serve
+the merge-gate use case: they need a knowledge base seeded from an e2e suite, a diff
+to reason about, and they report by failing a build. `scan` needs none of that -- it
+takes a bare URL, so it exists for a reader with no e2e suite, no diff, and no CI to
+gate, who wants to know what is broken on a site they did not build. It never fails
+(`cmd_scan` always returns 0): the report is the deliverable, not a pass/fail signal.
 """
 
 from __future__ import annotations
@@ -24,6 +31,7 @@ from qabot.llm import default_provider
 from qabot.models import Expectation, Provenance
 from qabot.reporter import exit_code, render_markdown
 from qabot.runner import run as run_qa
+from qabot.scan.cli import cmd_scan
 from qabot.seeder import seed_knowledge_base
 from qabot.store import KBStore
 from qabot.testgen import emit_tests
@@ -345,6 +353,14 @@ def main(argv: list[str] | None = None) -> int:
     p_browser.add_argument("--headed", action="store_true", help="watch the browser work")
     p_browser.add_argument("--blocking", action="store_true")
     p_browser.set_defaults(func=cmd_demo_browser)
+
+    p_scan = sub.add_parser("scan", help="check a live app you have only the URL of")
+    p_scan.add_argument("url")
+    p_scan.add_argument("--out", default="qabot-scan-report.html")
+    p_scan.add_argument("--max-pages", type=int, default=25)
+    p_scan.add_argument("--delay", type=float, default=1.0)
+    p_scan.add_argument("--artifacts", default="qa-artifacts")
+    p_scan.set_defaults(func=cmd_scan)
 
     args = parser.parse_args(argv)
     return args.func(args)
