@@ -323,3 +323,146 @@ mutually incompatible units). Real ACVs for any incumbent. Any published false-p
 rate for any agentic QA tool — none exists. Why Octomind actually discontinued. Whether
 Ranger's named customers are paying or design partners. Any measurement at all of
 prose-docs-vs-UI-behavior as an oracle.
+
+---
+
+# The scan pivot, re-examined after building it (2026-09-04)
+
+The intrinsic tier of the merge gate was rebuilt as `qabot scan` and aimed at a different
+buyer: someone who shipped an AI-built app, has no test suite, and cannot read a stack
+trace. This section is the falsification review of that pivot, run against the working
+product. It supersedes nothing above; the CI analysis stands as written.
+
+## Verdict
+
+**The buyer is real. The wedge is not.** That is a genuine improvement over §4 — where the
+CI buyer never voiced the pain at all — and it still does not add up to a business as
+scoped.
+
+## What killed the wedge
+
+**Our v1 is somebody else's lead magnet.** ArgosX ("Independent verification for AI-built
+apps", targeting Lovable/Bolt/Cursor/v0/Replit users) gives away, free and without signup,
+a superset of everything `qabot scan` does: anonymous crawl, broken links, accessibility,
+page-level checks. What they charge $49/mo for is the authenticated tier — which their own
+page says is "where most real problems are found". That is the boundary we drew between v1
+and v2, drawn by a competitor, with the paid side on the half we deferred. VibeEval and
+Rixel occupy adjacent positions; TestSprite ($6.7M seed) does "URL to 50-100 e2e tests in
+ten minutes" at scale for developers.
+
+**Platform absorption is no longer a prediction.** Lovable shipped Project Monitoring in
+**June 2026** — scheduled app checking, code review, and *recent visitor errors* — two
+months before the scan spec was written, and a security scan that runs automatically in the
+publish dialog. Replit's Agent browser-tests the apps it builds and hits the same login wall
+we do, from the inside. §5's platform-absorption section missed all of this because the
+five-lane research audited QA *vendors*; the app builders were only ever assessed as
+distribution, never as competitors. That is a scoping error in our own research method.
+
+**Real visitor telemetry beats a stranger's crawl at our own signal.** "Recent visitor
+errors" sees logged-in traffic, real routes and real state. One script tag, shipped free
+inside the builder, is strictly better at crash-class detection than an anonymous synthetic
+sweep. This is the single most damaging fact in the section.
+
+**The long-term half has no buyer either.** "Shape 1 aimed at shape 2" assumed we would
+eventually sell verification to the platforms. No partnerships found in either direction;
+both large platforms built verification in-house (Replit published its own REPL-based
+self-testing engine, claimed 3x faster and 10x cheaper). Reported as absence of evidence,
+but it points the same way as everything else: platforms treat verification as core.
+
+## What survives
+
+- **The logged-out stranger's viewpoint.** Real, narrow, and the one thing a platform's own
+  agent structurally cannot do, because it runs inside the build session. The owner is
+  always logged in and never sees it. `challengebrew.com/account` throwing
+  `Cannot read properties of null (reading 'tier')` while redirecting a logged-out visitor
+  is the proof case.
+- **The honesty properties.** "This run verified nothing", per-source discovery counts, the
+  always-rendered could-not-check section, and a false-positive rate measured under an
+  adjudication protocol written before the numbers existed. No competitor reports the shape
+  of what it could not see. It is the intellectual core of this codebase — and it is a
+  subtle good sold to a non-expert, while VibeEval already headlines "0 false positives"
+  without doing any of the work.
+- **The authenticated half we deferred** — defensible precisely because it is hard
+  (credentials, session state, not mutating a stranger's production data). We deferred it to
+  find out whether v1 was worth anything; the answer that came back is that v1 is what other
+  people give away.
+
+None is a company alone. The authenticated half plus the honesty properties might be:
+**authenticated verification with an honest account of coverage** is a trustworthiness claim
+a platform's self-marking agent cannot credibly make about its own output.
+
+## The riskiest assumption, and the thing we never measured
+
+**That "found" is separable from "fixed" for this buyer.** Every observed dollar pays for
+removal: $25 Fiverr gigs, $70/hr rescue agencies, $249 human-verified scans — and the one
+that matters, Lovable's free fix, applied by the same agent that wrote the bug, in the same
+window, ten included in the account. *A report is the first half of a job whose second half
+is already free and adjacent.* We occupy the cheapest link in our own value chain.
+
+**And we measured precision without ever measuring consequence.** The 0%-false-positive
+result answers "is this finding real". It does not answer "does anyone care". From the HN
+launch thread of a company that shipped this exact wedge: *"I worked with exploratory
+testing companies that would report hundreds of bugs that nobody ever cared about."* Our
+measurement programme was built against Google Tricorder's <10% bar — the right constraint
+for a merge gate a developer can switch off, the wrong one for a report a non-engineer
+decides whether to buy.
+
+## A measured limitation nobody had written down
+
+On SPA hosting a nonexistent path commonly returns the index shell with **200**:
+`podprime.ai/definitely-not-a-real-page-xyz` → 200, `student-os.net/...` → 200,
+`challengebrew.com/...` → 404. Two of three soft-404. On those apps BROKEN's "main document
+non-2xx" source cannot fire at all, and GLITCHY's "links to routes that 404" cannot either —
+so BROKEN collapses to `blank_page` plus 5xx from the page's own XHRs. **`blank_page` is
+carrying far more weight than the spec implies**, and it is the one oracle with a tunable
+threshold. The severity distribution was validated against server-rendered apps (datasette,
+CTFd) and this buyer's hosting behaves differently. Three apps is a flag, not a rate.
+
+## What would change the answer, cheapest first
+
+1. **The consequence test.** Scan 20 real AI-built apps, contact the owners, record what they
+   *do*. If a material fraction fix something they did not know was broken, the objection
+   above is answered. If they shrug, 0% false positives is confirmed as necessary and
+   insufficient. Days, not months — and wire the source maps first, or it runs with one hand
+   tied: an unresolved minified frame (`"Wl"`) is not a degraded finding to this buyer, it is
+   a non-finding.
+2. **The differential test.** Run ArgosX's free scan and `qabot scan` against the same ten
+   apps and diff the findings. One afternoon.
+3. **Reddit.** Every demand claim here is inferred from agencies, SEO content and vendor
+   pricing — third parties reasoning about the buyer. r/lovable and r/vibecoding were
+   inaccessible three ways, exactly as in the 2026-08-28 research, and that is where this
+   buyer actually talks.
+4. **A credible auth path** that does not turn this into a security product.
+5. **Evidence any of the three live competitors has revenue.** None could be established.
+   If all three are zero, "three competitors" collapses to "three people had the same idea
+   and none of them sold anything" — a different and worse signal about the category.
+
+## Evidence limits
+
+No Reddit, no Discord, no Lovable forum — no primary buyer voice at all. No reviews, funding
+or usage data for ArgosX, VibeEval or Rixel; treat them as three live *commercial attempts*,
+not three businesses. `docs.lovable.dev/features/monitoring` 404s, so what Project Monitoring
+actually detects is unconfirmed. Ghostship (YC S25, "find bugs in your web app by entering in
+your URL") pivoted to Bidflow with the same two founders and its DNS torn down, but a trade
+blog reports ~$200K ARR in nine months, uncited, and no founder post-mortem exists — so it is
+evidence about pace and ceiling, not about whether anyone buys.
+
+## Addendum (2026-09-05): the detection layer was the problem, not the wedge
+
+EVAL.md's visitor-experience experiment (88 AI-built apps with public source, two corpora,
+frozen protocol) falsifies the sentence this section's verdict leaned on. Wrong content in
+AI-built apps is mostly a *hallucinated resource* — a route the router never declared, an
+image URL that never existed, a placeholder shipped as content, a crash the error boundary
+swallowed — and each of those is mechanically detectable with app-declared provenance. Five
+source-free oracles: 0 confirmed false positives across 148 apps once a `todo`-in-Portuguese
+bug in one pattern was corrected (see EVAL.md). 25% of a random sample and 12 of 100
+actively-maintained apps carried something its owner would fix, by our protocol; the
+consequence test with owners remains unrun.
+
+What changes in the analysis above: "our v1 is somebody else's lead magnet" was written
+about crash-class and broken-link signals. It has not been checked against the combination
+found here — hallucinated images, shipped placeholders, caught crashes, dead CTAs, filter
+that filters nothing — each with a screenshot and a one-line visitor consequence. Item 2 of
+"what would change the answer" (the ArgosX differential) is now the cheapest decisive test,
+and it should be run on corpus B, where the owners are alive. The login boundary is worse than
+§"What survives" assumed: 24 of 40 active apps show a stranger exactly one page.
