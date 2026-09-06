@@ -761,6 +761,25 @@ kind a visitor hits on the first click.
 scaffold metadata.** That is the number to carry forward, and its error bar is wide; it is
 also a floor, because 41 of the 100 showed a stranger one page.
 
+**Correction: the Lovable host is not always the product (2026-09-05, from Jordan's
+review).** The corpus was harvested at `<slug>.lovable.app`, Lovable's preview host. Four
+of the twelve would-fix repos declare a different homepage, and one links to a custom
+domain from its page. Crawling those five real deployments: `website-gga5.vercel.app` is a
+dead 404, so the Lovable host *is* the live site and its finding stands; `medicalbaise
+.vercel.app` is a larger, different build (the owner moved to Cursor in August) with none
+of the Lovable host's broken images or overflow — **void**; `priyanka-portfolio-delta
+.vercel.app` is a different portfolio with no "Download CV" button — **void**;
+`smoke-shop-hub.vercel.app` is a different shop that ships its own placeholder address,
+"123 Main Street, Suite 100, Anytown, USA" — same class, real site; `redvisionmusic.com`,
+the studio's production domain, loads five merch images from Unsplash ids that do not exist
+— same class, real site. So: the 12-of-100 consequence figure is overstated by the share of
+owners who have moved on from the preview host, which in this check was 2 of 5; the defect
+*classes* reproduce on production domains; and a corpus for the next round has to be built
+from declared homepages and custom domains, not the builder's preview host. The
+"actively maintained" label was also too strong: the search window selected repos with a
+push on one of two days, and the commit histories show many were touched once after months
+of silence. "Touched in the window" is what it guarantees.
+
 **Correction, and what it says about adjudication.** Running the oracles over a third corpus
 (B2, 60 more actively-pushed apps, below) produced five `TODO` findings in Portuguese and
 Spanish copy — "todo o Brasil", "Todo mi trabajo": the pattern was case-insensitive and
@@ -774,4 +793,79 @@ adjudicated from the tool's own output is not adjudicated.
 `judge.py`, `aggregate.py`, `tally.py`, `PLAN.md` (protocol), `judge_cache.json` (every
 verdict), `runs/<app>/crawl.json` for all 88 apps (screenshots stayed in the session
 scratchpad; the adjudicated contact sheets are in `runs/adjudicate/`),
-`runs/adjudication_{A,B}.json`, `corpus/meta.json` (repo, last push, corpus per app).
+`runs/adjudication_{A,B,B2}.json`, `corpus/meta.json` (repo, last push, corpus per app),
+`runs/outreach_drafts.md` (twelve owner messages, drafted, not sent).
+
+## User journeys on Langflow PR #14913 (2026-09-05)
+
+Spec `docs/superpowers/specs/2026-09-05-user-journeys-design.md`, plan
+`docs/superpowers/plans/2026-09-05-user-journeys.md`, code `spikes/journeys/` (28 tests),
+artefacts `qa-artifacts/journeys-2026-09-05/`. Two local Langflow instances from one
+checkout, same frontend build, both started with `LANGFLOW_LAZY_LOAD_COMPONENTS=true
+LANGFLOW_ALLOW_CUSTOM_COMPONENTS=false`: **fixed** at the merge commit `84a3649` on 7860,
+**broken** at its parent on 7861. Ground truth from the server logs: the broken build skips
+every starter project at startup ("unavailable components: ChatInput, ChatOutput, …") and
+serves 0 flows; the fixed build serves 26 and skips one starter of its own, "Research
+Translation Loop" (ArXivComponent unavailable) — a real, unrelated finding about 1.12.1.
+
+**Authoring (the deliverable a human grades first).** One model call from the diff, the PR
+text, the three settings names the diff touches, and five Playwright specs picked by token
+overlap. Seven journeys came back. Journey 1 is the happy path the fix protects, names both
+settings as preconditions, and uses the product's words — Starter Project, Basic Prompting,
+Playground, the exact "Flow build blocked: custom components are not allowed" string. J2–J7
+cover registry parity, the per-component merge, same-name override, lazy hydration, path
+equivalence, and that the gate still blocks a genuine custom component — each traced to a
+hunk or a sentence. Two defects in the authoring: the spec selector's token overlap chose
+irrelevant specs (duplicate-DOM-id and MCP tests), so the author's picture of the UI came
+from the diff alone; and it therefore described a first-run Langflow that does not exist —
+"open the Starter Project folder from the projects sidebar" — when a fresh install shows a
+"Welcome to Langflow / Create first flow" screen and reaches the starters through a template
+picker. Jordan's read of the journeys is the grade that matters here and is still owed.
+
+**Preconditions as contracts.** The first walk failed J3 and J4 on *both* instances because
+neither has a custom components path: an unmet precondition read as a defect. The walker now
+takes `--env KEY=VALUE` for what the instance was started with and blocks, before any
+action, a journey whose `preconditions.settings` this instance does not satisfy, naming the
+setting. Second walk: J2–J6 blocked with reasons like "LANGFLOW_ALLOW_CUSTOM_COMPONENTS must
+be 'true' but this instance has 'false'; settings.components_path is required". That is the
+honest shape: five of seven journeys need a differently configured server, and the report
+says so instead of failing them.
+
+**Walking.** Three walker defects found and fixed by looking at screenshots rather than
+verdicts: the driver's `goto` returns on the SPA shell ("Loading…"), so the model was
+deciding from a splash screen — the walker now waits for network idle and then for the
+visible text to hold still, and screenshots after that; an API JSON page whose Python source
+contains "Unable to connect to the Ollama API" was read as the app's error screen — the
+error-text check now runs only on `text/html` documents; the aborted first run had created a
+"New Flow" on both instances and contaminated the second — both were restarted from empty
+state. One walker defect remains and is the finding of the run: **the walker stood on the
+discriminating screen and walked past it.** After "Create first flow", the fixed instance
+shows *"Or start from a template: Simple Agent · Vector Store RAG · Browse more…"*; the broken
+one shows only *"Blank Flow"* (`fixed/shots/J1/settled_01_02.png` vs
+`broken/shots/J1/settled_01_02.png`). Because the step said "folder", the walker clicked on
+to the Starter Project folder, which on both instances holds only the flow it had just
+created, and the judge failed step 1 on both for the same non-discriminating reason. The
+regression was visible in one screenshot pair and was not reported as such.
+
+**Scorecard against the spec's five questions.** Journeys sensible: yes, with one wrong UI
+assumption, pending Jordan. Author understood the change: yes — both settings named, the
+protected behaviour named, the exact error string named. Walker can walk: 3 of 3 actions
+completed per attempt, 0 driver errors after the settle fix; it cannot yet judge purpose
+over wording. Regression caught: **visible in evidence, not in verdicts** — both instances
+FAIL step 1 by inference (QUESTION), so the tool did not discriminate. Quiet on the fixed
+build: no — one false FAIL, the same one. Environment gaps the journeys did not state: no
+model API key, so a build reaching the model node fails on the fixed build too; the
+"Flow build blocked" gate the PR describes never had a flow to fire on, because the broken
+build's symptom is upstream (no starters at all).
+
+**What this says.** Journeys as the unit are right: seven pages of steps a person can read,
+argue with and repeat, five of them correctly declared unwalkable on this server, and one
+screenshot pair a human can settle in a glance. The two missing pieces are exactly the ones
+the spec predicted: product knowledge for the author (the right specs, or a crawl of the
+running UI before writing), and a walker that judges the step's purpose on the screen where
+it was served rather than the screen its wording named. Neither is a research problem.
+
+**Not done.** Jordan's grading of the journeys; a human-corrected step 1 re-walked to see
+whether the verdicts then discriminate (the product's intended loop: a person edits the
+journey, the tool re-walks it); J7 with a real hand-edited custom component; the
+ArXivComponent starter skip reported upstream. Instances left running on 7860/7861.

@@ -466,3 +466,52 @@ that filters nothing — each with a screenshot and a one-line visitor consequen
 "what would change the answer" (the ArgosX differential) is now the cheapest decisive test,
 and it should be run on corpus B, where the owners are alive. The login boundary is worse than
 §"What survives" assumed: 24 of 40 active apps show a stranger exactly one page.
+
+## The differential, as far as it can honestly be taken (2026-09-05)
+
+**The empirical version cannot be run on other people's apps.** ArgosX's terms: *"You may
+not use ArgosX to test systems you do not control or are not authorized to test."* Its form
+adds *"By scanning you confirm you're authorized to test this app"*, and its report goes only
+to an email address. VibeScan gates on a checkbox, *"I own this app or have permission to
+security test it."* ShipSafe requires an account and a URL *"you tell us you own."* Running any
+of them against the 100-app corpus would mean making that attestation falsely, in Jordan's
+name, on a dozen strangers' apps. Not done. The version that *can* be run — our scan and
+theirs against an app we own — needs an app we own on a public host, and is queued behind
+that.
+
+**The documentary version, from each vendor's own page (fetched 2026-09-05):**
+
+| | ArgosX (free Deep) | VibeScan (free) | VibeEval ($49/mo) | ShipSafe ($9+) | `qabot scan` + the visitor-experience oracles |
+|---|---|---|---|---|---|
+| leaked keys / secrets | yes | yes | yes | — | no |
+| security headers, TLS, cookies | yes | yes | — | — | no |
+| Supabase RLS / open database | yes | yes | yes | — | no |
+| broken links | **yes** | — | — | — | yes (rendered soft-404 too) |
+| accessibility / SEO | yes | — | — | — | no |
+| "unfinished content (placeholder text, formatting errors)" | **yes** | — | — | — | yes |
+| images that never load, hallucinated image URLs | — | — | — | — | yes |
+| caught crashes rendered as an error screen | — | — | — | — | yes |
+| buttons that do nothing | — | — | — | — | yes (58%, reported apart) |
+| horizontal scroll on a phone | — | — | — | — | yes |
+| link label vs destination (wrong page, dead filter) | — | — | — | — | yes (inferred, capped) |
+| a page that never loads / a white screen | — | — | — | — | yes |
+| results on-page without an email | no (email) | yes | ? | yes (account) | yes |
+| requires ownership attestation | yes | yes | ? | yes | no (read-only, robots, no forms) |
+
+**What this says.** The category that looked like "three competitors" in August is now at
+least eight free-or-cheap scanners aimed at Lovable/Bolt/v0 users, and *every one of them is
+a security scanner*: keys, headers, RLS, CVEs. Two of our mechanical oracles — broken links
+and placeholder text — sit inside ArgosX's free tier, exactly as §"What killed the wedge"
+feared. The other five, and the judge, sit inside nobody's: the field checks whether the app
+can be *broken into*, and nobody checks whether it *works for a visitor*. The 12-of-100
+would-fix findings in EVAL.md are, with two exceptions (a placeholder phone number, footer
+404s), of the kind no listed product claims to look for.
+
+That is a narrower and more defensible statement than August's "our v1 is somebody else's
+lead magnet": the *crash-and-broken-link* v1 was; the *visitor-experience* set is not, yet.
+Whether it is worth money is still the unrun owner test — twelve drafted, unsent messages
+sit in `qa-artifacts/vx-2026-09-05/runs/outreach_drafts.md` for Jordan to approve verbatim.
+
+**Evidence limits.** Vendor pages, read once, on one day; "—" means *not claimed on the
+page*, not *absent from the product*. No scanner was run. VibeEval's comparison page names
+no non-security check at all, which is itself the signal.
