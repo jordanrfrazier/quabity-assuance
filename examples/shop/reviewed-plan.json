@@ -1,0 +1,116 @@
+{
+  "repo": "/private/tmp/qabot-cli-2026-09-06/demo",
+  "base": "HEAD~1",
+  "head": "HEAD",
+  "description": "Review the bundled demo shop's user-visible cart and checkout behavior. Exercise adding a widget and completing an ordinary purchase. Also examine the expired-card path, which the repository describes as a known defect, while distinguishing an expected payment rejection from an unrelated application or browser failure.",
+  "startup": {
+    "command": "uv run --offline --no-sync python -m uvicorn demo.app:app --host 127.0.0.1 --port 7880",
+    "cwd": "..",
+    "health_url": "http://127.0.0.1:7880/health",
+    "env": {},
+    "required_env": [],
+    "setup_commands": [],
+    "reset_command": "curl -fsS -X POST http://127.0.0.1:7880/reset",
+    "sources": [
+      "app.py",
+      "ui.py",
+      "e2e/test_shop_flows.py",
+      "../README.md"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "shop-add-widget",
+      "title": "Add a widget to the cart",
+      "persona": "A shopper choosing an item",
+      "goal": "add one widget and inspect the cart",
+      "because": "the repository's shop flow requires the selected product and total to be visible",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "The application state was reset before this journey"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open the shop UI at /ui.",
+          "see": "The Shop page offers a Product selector, Quantity input, and Add to cart button.",
+          "expected_error": false
+        },
+        {
+          "do": "Choose widget with quantity 1 and add it to the cart.",
+          "see": "The Your cart page shows 1 x widget and Total: 1000 cents.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "ui.py register_ui shop and ui_add_item; e2e/test_shop_flows.py::test_add_item_to_cart",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "shop-valid-checkout",
+      "title": "Complete a purchase with a valid card",
+      "persona": "A shopper ready to purchase a widget",
+      "goal": "complete checkout with a valid card",
+      "because": "the repository protects successful checkout and its order confirmation",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "The application state was reset before this journey"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open the shop UI at /ui and add one widget to the cart.",
+          "see": "The Your cart page shows 1 x widget and Total: 1000 cents.",
+          "expected_error": false
+        },
+        {
+          "do": "Choose the valid card and place the order.",
+          "see": "The page shows Order confirmed and an Order reference.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "ui.py ui_checkout valid branch; e2e/test_shop_flows.py::test_checkout_with_valid_card",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "shop-expired-card",
+      "title": "Expired card explains the rejection and preserves the cart",
+      "persona": "A shopper whose saved card has expired",
+      "goal": "understand the rejection and retry without rebuilding the cart",
+      "because": "the repository marks the generic message and cleared cart as deliberate defects",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "The application state was reset before this journey"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open the shop UI at /ui and add one widget to the cart.",
+          "see": "The Your cart page shows 1 x widget and Total: 1000 cents.",
+          "expected_error": false
+        },
+        {
+          "do": "Choose the expired card and place the order once, then stop without resubmitting.",
+          "see": "The alert tells the shopper that the card is expired.",
+          "expected_error": true
+        },
+        {
+          "do": "Inspect the cart after the rejected payment.",
+          "see": "The cart still shows 1 x widget and Total: 1000 cents so the shopper can retry.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "ui.py ui_checkout expired branch; e2e/test_shop_flows.py::test_checkout_with_expired_card_preserves_cart; README.md deliberate defects",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [],
+  "sources": {
+    "app.py": "Actual FastAPI application, /health and /reset behavior, and checkout API contract.",
+    "ui.py": "Actual /ui controls, visible cart text, and valid/expired checkout behavior.",
+    "e2e/test_shop_flows.py": "Repository-authored widget, valid-card, and expired-card behavioral expectations.",
+    "../README.md": "Documents the demo UI and its deliberate expired-card defects."
+  }
+}

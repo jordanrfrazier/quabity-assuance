@@ -1,0 +1,262 @@
+{
+  "repo": "/private/tmp/qabot-cli-2026-09-06/demo",
+  "base": "HEAD~1",
+  "head": "HEAD",
+  "description": "Review the bundled demo shop's user-visible cart and checkout behavior. Exercise adding\na widget and completing an ordinary purchase. Also examine the expired-card path, which\nthe repository describes as a known defect, while distinguishing an expected payment\nrejection from an unrelated application or browser failure.\n",
+  "startup": {
+    "command": "uv run python -m shop",
+    "cwd": "demo",
+    "health_url": "http://127.0.0.1:8000/healthz",
+    "env": {
+      "PAYMENT_API_KEY": "${PAYMENT_API_KEY}"
+    },
+    "required_env": [
+      "PAYMENT_API_KEY"
+    ],
+    "setup_commands": [],
+    "reset_command": null,
+    "sources": [
+      "demo/README.md",
+      "demo/pyproject.toml",
+      "demo/shop/__main__.py",
+      "demo/shop/app.py",
+      "demo/e2e/test_shop_flows.py"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "J1",
+      "title": "Add a widget to an empty cart from the storefront",
+      "persona": "A shopper browsing the demo shop for the first time",
+      "goal": "Put one Widget in the cart and see it priced correctly on the cart page",
+      "because": "The storefront's only action is the per-product 'Add to cart' form, and the e2e suite protects add-to-cart as a named flow (test_add_item_to_cart). The change description asks for adding a widget to be exercised.",
+      "preconditions": {
+        "settings": {
+          "PAYMENT_API_KEY": "${PAYMENT_API_KEY}",
+          "SHOP_CATALOG": "demo/e2e/shop_data/catalog.json (startup default)"
+        },
+        "state": [
+          "Shop freshly started so the in-memory 'default' cart holds no items",
+          "Catalog contains Widget, Gadget and Doohickey"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open http://127.0.0.1:8000/",
+          "see": "A page headed 'Demo Shop' listing Widget $10.00, Gadget $5.00 and Doohickey $2.50, each with its own 'Add to cart' button, and a 'View cart' link",
+          "expected_error": false
+        },
+        {
+          "do": "Click the 'Add to cart' button in the Widget row",
+          "see": "The browser lands on the cart page at /cart (the form posts to /cart/items and redirects)",
+          "expected_error": false
+        },
+        {
+          "do": "Read the cart page",
+          "see": "Heading 'Your cart', a table row reading Widget, quantity 1, $10.00, and 'Total: $10.00'. The 'Your cart is empty.' message is absent and a 'Checkout' button is present.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/shop/templates/index.html (per-product add form), demo/shop/app.py:36-66 (add_item, cart_page), demo/e2e/test_shop_flows.py::test_add_item_to_cart",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J2",
+      "title": "Complete an ordinary purchase with a good card",
+      "persona": "A shopper who has chosen an item and wants to pay",
+      "goal": "Carry a cart through checkout with an accepted card and reach a confirmed order",
+      "because": "The change description asks for an ordinary purchase to be completed; checkout is the shop's terminal user-visible flow and is protected by test_checkout_with_valid_card.",
+      "preconditions": {
+        "settings": {
+          "PAYMENT_API_KEY": "${PAYMENT_API_KEY}"
+        },
+        "state": [
+          "A cart holding at least one item, e.g. after J1",
+          "PAYMENT_API_KEY present in the server's environment; without it every checkout is refused at the payment step (README, app.py:86-87)"
+        ]
+      },
+      "steps": [
+        {
+          "do": "From the cart page showing Widget and 'Total: $10.00', click 'Checkout'",
+          "see": "The checkout page at /checkout, headed 'Checkout', with a 'Card token' text field pre-filled with 'valid' and a 'Pay now' button",
+          "expected_error": false
+        },
+        {
+          "do": "Leave the card token as 'valid' and click 'Pay now'",
+          "see": "A checkout result page reading 'Order confirmed: ord_1001' styled as the success (ok) case, with a 'Back to cart' link. No 503 'payment_unconfigured' response and no 402.",
+          "expected_error": false
+        },
+        {
+          "do": "Follow 'Back to cart'",
+          "see": "The cart page reads 'Your cart is empty.' — a confirmed order clears the cart on purpose (app.py:98), which is the intended outcome here and must not be confused with the expired-card defect in J3",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/shop/app.py:77-104 (checkout), demo/shop/templates/checkout.html, demo/shop/templates/checkout_result.html, demo/e2e/test_shop_flows.py::test_checkout_with_valid_card",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J3",
+      "title": "Expired card is refused and the cart should survive (known defect)",
+      "persona": "A shopper whose card has expired at the payment step",
+      "goal": "Be told the card was refused and still find the cart intact so another card can be tried",
+      "because": "README names this as the repository's one known defect: the expired path is supposed to refuse payment and leave the cart intact, and clears it instead. test_checkout_with_expired_card_preserves_cart asserts the intact cart and fails.",
+      "preconditions": {
+        "settings": {
+          "PAYMENT_API_KEY": "${PAYMENT_API_KEY}"
+        },
+        "state": [
+          "A freshly started shop with an empty 'default' cart"
+        ]
+      },
+      "steps": [
+        {
+          "do": "From the storefront, click 'Add to cart' on Widget three times",
+          "see": "The cart page shows three Widget rows and 'Total: $30.00'",
+          "expected_error": false
+        },
+        {
+          "do": "Click 'Checkout', replace the card token value with 'expired' and click 'Pay now'",
+          "see": "A checkout result page reading 'Your card has expired. Please try another card.', styled as the failure (failed) case. This refusal is the correct, expected product behavior — a declined payment, not an application fault. Record it as a defect only if instead the page shows a server traceback, a 500, a blank page, a browser navigation failure, or the 'payment_unconfigured' 503 that indicates PAYMENT_API_KEY was never supplied.",
+          "expected_error": true
+        },
+        {
+          "do": "Follow 'Back to cart' to /cart",
+          "see": "Documented expectation: the three Widget rows and 'Total: $30.00' are still there so the shopper can retry with another card. Expected observation on the current build: the page reads 'Your cart is empty.' instead — this is the known defect (app.py:90 pops the cart while refusing payment). Report the cleared cart as the finding; do not report the refusal message itself as the failure.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/README.md 'Known defect', demo/shop/app.py:89-96, demo/e2e/test_shop_flows.py::test_checkout_with_expired_card_preserves_cart",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J4",
+      "title": "Empty cart seen by direct URL entry",
+      "persona": "A shopper who opens a bookmarked cart link before adding anything",
+      "goal": "Understand that the cart is empty rather than see a broken page",
+      "because": "/cart is a user-visible entry point reachable without passing through the storefront, and cart.html has a distinct empty branch; J1 and J3 both depend on being able to tell an empty cart from a full one.",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop freshly started, no items added"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open http://127.0.0.1:8000/cart directly",
+          "see": "Heading 'Your cart' and the message 'Your cart is empty.'; no line-item table, no total line and no 'Checkout' button",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/shop/app.py:57-66, demo/shop/templates/cart.html (empty branch)",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J5",
+      "title": "Checkout reached directly by URL with no cart",
+      "persona": "A shopper who navigates or returns straight to the checkout page",
+      "goal": "See what the shop does when payment is attempted without a cart",
+      "because": "/checkout is served unconditionally and its form posts a card token without any cart identifier (checkout.html, app.py:119-124), so it is a reachable alternate entry point whose behavior is not stated anywhere in the repository.",
+      "preconditions": {
+        "settings": {
+          "PAYMENT_API_KEY": "${PAYMENT_API_KEY}"
+        },
+        "state": [
+          "Shop freshly started, no items added"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Open http://127.0.0.1:8000/checkout directly",
+          "see": "The 'Checkout' page renders with the card token field and 'Pay now' button even though no cart exists",
+          "expected_error": false
+        },
+        {
+          "do": "Click 'Pay now' with the pre-filled 'valid' token",
+          "see": "Record what the page shows. The code path issues a confirmation ('Order confirmed: ord_1001') without checking that a cart exists; whether confirming an order for an empty cart is intended is not stated in the repository and is listed in unresolved. Note the observation rather than grading it.",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/shop/app.py:77-104, 119-124; demo/shop/templates/checkout.html",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J6",
+      "title": "A product the catalog does not carry is refused",
+      "persona": "A client or shopper requesting an unknown SKU",
+      "goal": "Be told plainly that the product does not exist",
+      "because": "test_unknown_sku_returns_404 protects this rejection. The storefront only posts SKUs it rendered, so the reachable entry point is a direct POST to /cart/items.",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop running with the default catalog"
+        ]
+      },
+      "steps": [
+        {
+          "do": "POST to http://127.0.0.1:8000/cart/items with JSON body {\"sku\": \"nonexistent\", \"qty\": 1}",
+          "see": "HTTP 404 with body {\"error\": \"unknown_sku\"}. This rejection is the correct behavior, not a defect; a 500, a traceback or a 201 acceptance would be the defect.",
+          "expected_error": true
+        },
+        {
+          "do": "Open /cart",
+          "see": "The cart is unchanged by the refused request — still 'Your cart is empty.' if nothing was added before",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "demo/shop/app.py:46-47, demo/e2e/test_shop_flows.py::test_unknown_sku_returns_404",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "J7",
+      "title": "Checkout with the payment key absent",
+      "persona": "A shopper on an instance the operator started without payment credentials",
+      "goal": "Confirm the shop distinguishes an unconfigured gateway from a declined card",
+      "because": "README states the shop starts without PAYMENT_API_KEY but every checkout then fails at the payment step. J2 and J3 can only be graded if this readiness failure is recognisable and not mistaken for a product defect.",
+      "preconditions": {
+        "settings": {
+          "PAYMENT_API_KEY": "${PAYMENT_API_KEY}"
+        },
+        "state": [
+          "A second shop instance started with PAYMENT_API_KEY absent from the environment",
+          "One item added to that instance's cart"
+        ]
+      },
+      "steps": [
+        {
+          "do": "With an item in the cart on the unconfigured instance, open /checkout and click 'Pay now'",
+          "see": "HTTP 503 with {\"error\": \"payment_unconfigured\"} rather than a card-expiry message or an order confirmation. This is an expected environment-readiness refusal; treat any run of J2 or J3 that produces it as unmet setup, not as an application defect.",
+          "expected_error": true
+        }
+      ],
+      "traces_to": "demo/README.md 'Running it' (payment stub paragraph), demo/shop/app.py:86-87",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [
+    "No dependency-install or bootstrap command is documented. README gives only `uv run python -m shop`; pyproject lists fastapi/starlette/uvicorn/httpx/jinja2 but there is no lockfile, virtualenv, or `uv sync` instruction in the repository, so the exact preparation step is unstated.",
+    "PAYMENT_API_KEY is required but its value must be supplied by the developer. The 'gateway stub' the README mentions is not present in this repository, so it is unknown whether a real network dependency exists or whether any non-'expired' token is simply accepted locally (app.py only branches on the literal token 'expired').",
+    "No working reset between journeys. POST /reset returns {\"status\": \"reset\"} but its body never touches CARTS (app.py:107-110), contradicting its docstring 'Clear all carts' and the e2e fixture that calls it before every test. Until this is settled, the only reliable reset is restarting the process, and every journey above assumes a freshly started shop.",
+    "The cart has no session or user isolation: all traffic shares a single hard-coded 'default' cart (app.py:48). Two reviewers, two browser tabs, or a concurrent e2e run will contaminate each other's journeys. Whether per-shopper carts are intended is unstated.",
+    "checkout_result.html renders `{{ card_token }}` as its <h1>, but neither the confirmed nor the expired branch passes card_token into the template, so the heading renders blank. Whether the heading is meant to show the token, a status word, or nothing is unstated; J2 and J3 therefore assert only on the message paragraph.",
+    "The JSON confirmation returns the order identifier under the key `message_id` (app.py:100) while test_checkout_with_valid_card asserts `order_id`. The two disagree; the HTML journeys above are unaffected, but the intended field name needs a decision.",
+    "The expired-card behavior is stated twice and inconsistently on purpose: README documents 'refuse payment and leave the cart intact' while app.py:90 pops the cart. J3 records the refusal as expected and the cleared cart as the defect, but which one is the intended contract for the release is Jordan's call, not inferrable from the code.",
+    "Whether /checkout should be payable with no cart is unstated. The handler takes no cart_id and confirms an order regardless (J5).",
+    "catalog.json carries both `price` and `price_cents` for widget and gadget but only `price` for doohickey; the app reads `price` only. Which field is authoritative, and whether `catalog_version: 2` implies a migration, is unstated.",
+    "No command is documented for running the e2e suite. pyproject sets testpaths = [\"shop\"], which contains no tests, and the e2e module's own docstring says it is excluded from the qabot test run and used as seeder input; it also requires an already-running shop on 127.0.0.1:8000.",
+    "The port is fixed at 8000 in the README but overridable via the PORT environment variable in shop/__main__.py; the README does not mention PORT. The journeys above assume the documented 8000.",
+    "No supported browser or OS is stated anywhere for the UI journeys; J1-J5 assume any modern browser rendering plain server-side HTML forms."
+  ],
+  "sources": {
+    "demo/README.md": "Run command, serving address, SHOP_CATALOG override, PAYMENT_API_KEY requirement and its failure mode, and the statement of the known expired-card defect.",
+    "demo/pyproject.toml": "Runtime dependencies and the pytest testpaths setting that excludes the e2e directory.",
+    "demo/shop/__main__.py": "Confirms host 127.0.0.1, default port 8000, and the undocumented PORT override.",
+    "demo/shop/app.py": "All user-visible routes and their observable responses: storefront, add-to-cart redirect, cart page, checkout page, payment branches (503 unconfigured, 402 expired, confirmation), the cart-clearing defect at line 90, the no-op /reset, and /healthz for the health check.",
+    "demo/shop/templates/index.html": "Storefront markup: per-product 'Add to cart' forms and the 'View cart' link — the visible entry points for J1.",
+    "demo/shop/templates/cart.html": "Cart line items, 'Total: $NN.NN' wording, 'Checkout' button, and the 'Your cart is empty.' branch used to judge J3's cart-survival step.",
+    "demo/shop/templates/checkout.html": "Card token field pre-filled with 'valid' and the 'Pay now' button — the exact controls J2, J3 and J5 operate.",
+    "demo/shop/templates/checkout_result.html": "Confirmation and refusal message rendering, the ok/failed styling, and the unbound card_token heading.",
+    "demo/e2e/shop_data/catalog.json": "Product names, SKUs and prices used for the expected on-screen amounts, plus the price/price_cents inconsistency.",
+    "demo/e2e/test_shop_flows.py": "The flows a human already thought worth protecting — add to cart, valid-card checkout, expired-card cart preservation, unknown SKU 404 — and the expected status codes and messages behind J1, J2, J3 and J6."
+  }
+}

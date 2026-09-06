@@ -1,0 +1,127 @@
+{
+  "repo": "/private/tmp/langflow-qabot-release-d14",
+  "base": "d7bd4b55a856216d1074d18e29fad38563158d10",
+  "head": "d14dec904fc55c5e79cfeb8dec2bdf449e638f9d",
+  "description": "Validate the PR14913 Langflow editor experience in a real browser by signing in, creating a fresh flow from the component list, wiring Chat Input through an IBM WatsonX Agent to Chat Output, and receiving a real Playground response.",
+  "startup": {
+    "command": "/private/tmp/langflow-qabot-release-d14/.venv/bin/langflow run --host 127.0.0.1 --port 7865 --frontend-path /Users/jordan.frazier/Documents/frazier_projects/qa-targets/langflow/src/frontend/build --log-level error --no-open-browser",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:7865/health",
+    "env": {
+      "PYTHONPATH": "/private/tmp/langflow-qabot-release-d14/src/backend/base:/private/tmp/langflow-qabot-release-d14/src/backend:/private/tmp/langflow-qabot-release-d14/src/lfx/src",
+      "LANGFLOW_CONFIG_DIR": "/private/tmp/langflow-qabot-release-d14-runtime/config",
+      "LANGFLOW_DATABASE_URL": "sqlite:////private/tmp/langflow-qabot-release-d14-runtime/langflow.db",
+      "LANGFLOW_AUTO_LOGIN": "false",
+      "LANGFLOW_LAZY_LOAD_COMPONENTS": "true",
+      "LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false",
+      "LANGFLOW_AGENTIC_EXPERIENCE": "true",
+      "LANGFLOW_DEACTIVATE_TRACING": "true",
+      "DO_NOT_TRACK": "true",
+      "LANGCHAIN_TRACING": "false",
+      "LANGCHAIN_TRACING_V2": "false",
+      "LANGSMITH_TRACING": "false",
+      "LANGSMITH_TRACING_V2": "false",
+      "LANGFLOW_SUPERUSER": "${LANGFLOW_SUPERUSER}",
+      "LANGFLOW_SUPERUSER_PASSWORD": "${LANGFLOW_SUPERUSER_PASSWORD}",
+      "WATSONX_APIKEY": "${WATSONX_APIKEY}",
+      "WATSONX_PROJECT_ID": "dae915e8-c7b7-4ddb-af09-f6757f3e5804",
+      "WATSONX_URL": "https://us-south.ml.cloud.ibm.com"
+    },
+    "required_env": [
+      "LANGFLOW_SUPERUSER",
+      "LANGFLOW_SUPERUSER_PASSWORD",
+      "WATSONX_APIKEY"
+    ],
+    "setup_commands": [],
+    "reset_command": null,
+    "sources": [
+      "Makefile",
+      "src/frontend/src",
+      "src/backend/base/langflow"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "pr14913-editor-watsonx-playground",
+      "title": "PR14913: build and run a WatsonX agent flow in the editor",
+      "persona": "authenticated Langflow flow builder",
+      "goal": "Create a working three-node agent flow from the editor and receive its Playground response",
+      "because": "PR14913 fixes lazy built-in component discovery when custom components are disabled, which must hold through sidebar construction and flow build/run",
+      "preconditions": {
+        "settings": {
+          "LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false",
+          "LANGFLOW_LAZY_LOAD_COMPONENTS": "true",
+          "LANGFLOW_AUTO_LOGIN": "false",
+          "LANGFLOW_AGENTIC_EXPERIENCE": "true"
+        },
+        "state": [
+          "Use a fresh browser context at http://127.0.0.1:7865.",
+          "Sign in only with the configured LANGFLOW_SUPERUSER and LANGFLOW_SUPERUSER_PASSWORD references.",
+          "Create a new flow for this journey; do not open or modify an existing flow."
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /login, fill Username with ${LANGFLOW_SUPERUSER}, fill Password with ${LANGFLOW_SUPERUSER_PASSWORD}, and submit Sign In once.",
+          "see": "The authenticated Langflow workspace is visible, with access to create a new flow."
+        },
+        {
+          "do": "Activate New Flow, then on the What do you want to build welcome surface activate the Components button in the left rail.",
+          "see": "The welcome surface closes and a fresh blank flow editor is visible with the component sidebar open beside the canvas."
+        },
+        {
+          "do": "Expand Input & Output in the component sidebar, then without a containing-scope filter press Enter on the button named Add Chat Input to canvas.",
+          "see": "A Chat Input node is visible on the canvas."
+        },
+        {
+          "do": "Expand Models & Agents in the component sidebar, then without a containing-scope filter press Enter on the button named Add Agent to canvas.",
+          "see": "An Agent node is visible on the canvas alongside Chat Input."
+        },
+        {
+          "do": "Expand Input & Output in the component sidebar if needed, then without a containing-scope filter press Enter on the button named Add Chat Output to canvas.",
+          "see": "A Chat Output node is visible on the canvas alongside Chat Input and Agent."
+        },
+        {
+          "do": "Within the Agent node, open the Language Model required combobox and select the IBM WatsonX-backed option ibm/granite-4-h-small. Retain the server-provided WatsonX configuration and do not expose or replace credentials.",
+          "see": "The Agent node's Language Model field shows ibm/granite-4-h-small selected with no missing-provider or missing-configuration error."
+        },
+        {
+          "do": "Press Enter on the application named Chat Input node to select it, then press Shift+ArrowLeft with repeat 20 on that same application.",
+          "see": "Chat Input remains present and the canvas still contains Chat Input, Agent, and Chat Output without a new error."
+        },
+        {
+          "do": "Press Enter on the application named Chat Output node to select it, then press Shift+ArrowRight with repeat 20 on that same application.",
+          "see": "Chat Output remains present and the canvas still contains Chat Input, Agent, and Chat Output without a new error."
+        },
+        {
+          "do": "Activate the button named Zoom canvas control, 100%, activate the menu item named Fit view to show all nodes, then press Escape on that same menu item so the zoom menu closes.",
+          "see": "The zoom menu is closed and the canvas accessibility outline exposes Chat Input, Agent, Chat Output, and their named connection-handle buttons."
+        },
+        {
+          "do": "Without a containing-scope filter, press Enter on the button named Output handle for Chat Message on node Chat Input, then press Enter on the button named Input handle for Input on node Agent.",
+          "see": "The canvas exposes a button named Edge from Chat Input to Agent."
+        },
+        {
+          "do": "Without a containing-scope filter, press Enter on the button named Output handle for Response on node Agent, then press Enter on the button named Input handle for Inputs on node Chat Output.",
+          "see": "The canvas exposes buttons named Edge from Chat Input to Agent and Edge from Agent to Chat Output."
+        },
+        {
+          "do": "Open Playground for this fresh flow and wait for the chat input to become usable.",
+          "see": "Playground is open with an enabled message input for the current flow."
+        },
+        {
+          "do": "Fill the Send a message... textbox with the entire quoted literal \"Reply with exactly: qabot editor flow works\", then submit Send exactly once.",
+          "see": "The Playground shows the exact full user message \"Reply with exactly: qabot editor flow works\" and a new completed real assistant response. No authentication, quota, missing-model, build, unregistered-component, or custom-component-disabled error is visible."
+        }
+      ],
+      "traces_to": "https://github.com/langflow-ai/langflow/pull/14913; src/frontend/src",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [],
+  "sources": {
+    "qa-artifacts/langflow-20260906/discovered-plan-v3.json": "Initial real discovery supplied editor and Assistant routes; this reviewed plan removes unsupported OpenAI and quota-as-success assumptions.",
+    "Makefile": "Startup command reviewed against the exact-revision local application.",
+    "src/frontend/src": "Editor, component-list, node configuration, and Playground behavior under review."
+  }
+}

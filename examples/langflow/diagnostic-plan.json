@@ -1,0 +1,60 @@
+{
+  "repo": "/private/tmp/langflow-qabot-release-d14",
+  "base": "d7bd",
+  "head": "d14dec904fc55c5e79cfeb8dec2bdf449e638f9d",
+  "description": "PR14931 browser diagnostic. Reviewed against the generated plan, seeded fixture, and actual authenticated UI. The expected policy diagnostic must be visible; a bare missing-model error is a failure even if the legacy build API contains the note.",
+  "startup": {
+    "command": "/private/tmp/langflow-qabot-release-d14/.venv/bin/langflow run --host 127.0.0.1 --port 7862 --frontend-path /Users/jordan.frazier/Documents/frazier_projects/qa-targets/langflow/src/frontend/build --log-level error --no-open-browser",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:7862/health",
+    "env": {
+      "PYTHONPATH": "/private/tmp/langflow-qabot-release-d14/src/backend/base:/private/tmp/langflow-qabot-release-d14/src/backend:/private/tmp/langflow-qabot-release-d14/src/lfx/src",
+      "LANGFLOW_CONFIG_DIR": "/private/tmp/langflow-qabot-release-d14-runtime/config",
+      "LANGFLOW_DATABASE_URL": "sqlite:////private/tmp/langflow-qabot-release-d14-runtime/langflow.db",
+      "LANGFLOW_AUTO_LOGIN": "false",
+      "LANGFLOW_LAZY_LOAD_COMPONENTS": "true",
+      "LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false",
+      "LANGFLOW_AGENTIC_EXPERIENCE": "true",
+      "LANGFLOW_DEACTIVATE_TRACING": "true",
+      "DO_NOT_TRACK": "true",
+      "LANGCHAIN_TRACING": "false",
+      "LANGCHAIN_TRACING_V2": "false",
+      "LANGSMITH_TRACING": "false",
+      "LANGSMITH_TRACING_V2": "false",
+      "LANGFLOW_SUPERUSER": "${LANGFLOW_SUPERUSER}",
+      "LANGFLOW_SUPERUSER_PASSWORD": "${LANGFLOW_SUPERUSER_PASSWORD}",
+      "WATSONX_APIKEY": "${WATSONX_APIKEY}",
+      "WATSONX_PROJECT_ID": "dae915e8-c7b7-4ddb-af09-f6757f3e5804",
+      "WATSONX_URL": "https://us-south.ml.cloud.ibm.com"
+    },
+    "required_env": ["LANGFLOW_SUPERUSER", "LANGFLOW_SUPERUSER_PASSWORD", "WATSONX_APIKEY"],
+    "setup_commands": [],
+    "reset_command": null,
+    "sources": ["Makefile", "/private/tmp/langflow-qabot-release-d14-runtime/seed_pr14931.py"]
+  },
+  "journeys": [{
+    "id": "restricted-substitution-diagnostic",
+    "title": "PR14931: browser explains restricted Agent substitution",
+    "persona": "authenticated flow reviewer",
+    "goal": "Understand why an imported customized Agent cannot build",
+    "because": "the restricted server replaces saved code with its built-in Agent",
+    "preconditions": {
+      "settings": {"LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false", "LANGFLOW_LAZY_LOAD_COMPONENTS": "true", "LANGFLOW_AUTO_LOGIN": "false"},
+      "state": ["The isolated database contains seeded flow 13200400-ae45-4b43-ba75-7d3ce7c8a8fe, named PR14931 Customized Agent Diagnostic. It retains a customized Agent schema without the stock model input. The seed script and source JSON are in the sibling runtime directory. Do not update or repair the node before testing."]
+    },
+    "steps": [
+      {"do": "Navigate to / in the fresh browser.", "see": "The Langflow sign-in form is visible."},
+      {"do": "Fill Username with ${LANGFLOW_SUPERUSER}, Password with ${LANGFLOW_SUPERUSER_PASSWORD}, and submit Sign In once.", "see": "The authenticated projects dashboard is visible and the sign-in form has disappeared."},
+      {"do": "Open /flow/13200400-ae45-4b43-ba75-7d3ce7c8a8fe without updating the component.", "see": "The Customized Agent Diagnostic node is visible, with a Run component control and no Language Model input."},
+      {"do": "Activate Run component once and read the resulting visible build error. Do not retry, update, or repair the node.", "see": "The error visibly explains all three facts: custom components are disabled (LANGFLOW_ALLOW_CUSTOM_COMPONENTS=false); the server's built-in Agent replaced the saved component code; the saved schema lacks the required model input. A bare No model selected message without the policy explanation does not satisfy this expectation.", "expected_error": true}
+    ],
+    "traces_to": "https://github.com/langflow-ai/langflow/pull/14931; src/lfx/src/lfx/utils/flow_validation.py",
+    "provenance": "inferred_from_diff"
+  }],
+  "unresolved": [],
+  "sources": {
+    "Makefile": "Source startup reviewed against working exact-revision local command",
+    "src/lfx/src/lfx/utils/flow_validation.py": "Policy diagnostic required by PR14931",
+    "src/lfx/src/lfx/workflow/agui_translator.py": "Canvas transport may terminate before enriched diagnostic; expectation retained unchanged"
+  }
+}

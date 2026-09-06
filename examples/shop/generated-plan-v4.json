@@ -1,0 +1,202 @@
+{
+  "repo": "/private/tmp/qabot-cli-2026-09-06/demo",
+  "base": "HEAD~1",
+  "head": "HEAD",
+  "description": "Review the bundled demo shop's user-visible cart and checkout behavior. Exercise adding\na widget and completing an ordinary purchase. Also examine the expired-card path, which\nthe repository describes as a known defect, while distinguishing an expected payment\nrejection from an unrelated application or browser failure.\n",
+  "startup": {
+    "command": "",
+    "cwd": ".",
+    "health_url": "",
+    "env": {},
+    "required_env": [],
+    "setup_commands": [],
+    "reset_command": "POST /reset",
+    "sources": [
+      "app.py#L87-L94",
+      "server.py#L1-L51"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "add-widget-to-cart",
+      "title": "Shopper adds a widget to the cart via the shop UI",
+      "persona": "First-time shopper browsing the demo shop",
+      "goal": "Add a widget to a new cart and see it reflected in the cart view with the correct price",
+      "because": "ui.py exposes a form on GET /ui that posts to /ui/cart/items, and the shop must show the added item and its price in the resulting cart page",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop has been reset so no prior cart exists"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /ui in a fresh unauthenticated browser",
+          "see": "The shop page loads showing a product selection form with a dropdown of catalog SKUs (including widget) and a quantity field",
+          "expected_error": false
+        },
+        {
+          "do": "Select 'widget' from the product dropdown, leave quantity at 1, and submit the form",
+          "see": "The browser is taken to a cart page listing the widget with its unit price shown",
+          "expected_error": false
+        },
+        {
+          "do": "Observe the cart total on the resulting cart page",
+          "see": "The cart total equals the widget's listed unit price (price shown in the earlier dropdown, e.g. 1000 cents) for quantity 1",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_add_item_to_cart",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "ordinary-purchase-valid-card",
+      "title": "Shopper completes an ordinary purchase with a valid card",
+      "persona": "Returning shopper buying a gadget",
+      "goal": "Add an item to the cart and check out successfully with a valid card, receiving order confirmation",
+      "because": "ui.py's /ui/checkout route confirms an order and clears the cart for any card_token that is not 'declined' or 'expired' (i.e. 'valid')",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop has been reset so no prior cart exists"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /ui in a fresh unauthenticated browser",
+          "see": "The shop page loads with the product selection form",
+          "expected_error": false
+        },
+        {
+          "do": "Select 'gadget' from the product dropdown, set quantity to 2, and submit the form",
+          "see": "The cart page shows the gadget line item with quantity 2 and a computed total",
+          "expected_error": false
+        },
+        {
+          "do": "On the cart page, submit checkout using the valid card token",
+          "see": "The browser is taken to an order confirmation page showing 'Order confirmed' and a non-empty order reference",
+          "expected_error": false
+        },
+        {
+          "do": "Navigate back to the same cart URL after confirmation",
+          "see": "The cart is now empty, consistent with the order having been placed and the cart cleared",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_checkout_with_valid_card",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "declined-card-preserves-cart",
+      "title": "Shopper's card is declined and the cart is preserved for retry",
+      "persona": "Shopper whose card is rejected by the payment processor",
+      "goal": "Attempt checkout with a declined card and confirm the shop reports the decline while keeping the cart items intact",
+      "because": "Both ui.py and app.py document that a 'declined' card token must show a decline message while preserving the cart so the shopper can retry with another card",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop has been reset",
+          "Cart contains at least one item"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /ui and add a widget to a new cart",
+          "see": "The cart page shows the widget item and a total",
+          "expected_error": false
+        },
+        {
+          "do": "Submit checkout on the cart page using the 'declined' card token",
+          "see": "The page shows an alert stating 'Card was declined.'",
+          "expected_error": true
+        },
+        {
+          "do": "Inspect the cart contents shown on that same declined-checkout response",
+          "see": "The cart still lists the previously added widget item with its price, unchanged from before the attempt",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "app.py#L123-L154 (declined branch), ui.py#L120-L155",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "expired-card-known-defect",
+      "title": "Shopper's card is expired and the shop's handling is checked against intended behavior",
+      "persona": "Shopper whose stored card has expired",
+      "goal": "Attempt checkout with an expired card and verify the rejection message correctly names the card as expired and that the cart remains available for retry, as a decline would",
+      "because": "The repository documents a deliberate defect: the expired-card path shows a generic 'Payment failed.' message that never names the card as expired, and it clears the cart unlike the declined path; the correct/intended behavior (matching the declined-card precedent and the human-confirmed expectation) is that the message should name the expiration and the cart should survive for retry",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop has been reset",
+          "Cart contains at least one item"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /ui and add 3 widgets to a new cart",
+          "see": "The cart page shows the widget line item with quantity 3 and a total",
+          "expected_error": false
+        },
+        {
+          "do": "Submit checkout on the cart page using the 'expired' card token",
+          "see": "The payment is rejected and the failure message explains the card is expired (naming expiration explicitly), not a generic 'Payment failed.' message",
+          "expected_error": true
+        },
+        {
+          "do": "Inspect the cart contents shown after the expired-card rejection",
+          "see": "The cart still contains the 3 widgets so the shopper can retry with a different card, rather than being cleared",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_checkout_with_expired_card_preserves_cart, ui.py#L120-L155 (expired branch), app.py#L123-L154 (expired branch)",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "unknown-cart-checkout-not-found",
+      "title": "Shopper attempts to check out a cart that no longer exists",
+      "persona": "Shopper returning to a stale or invalid cart link",
+      "goal": "Confirm that submitting checkout for a cart id the server does not recognize is rejected with a clear not-found message rather than a crash",
+      "because": "ui.py's /ui/checkout handler explicitly checks 'if cart_id not in state.carts' and returns a 'We could not find that cart.' alert",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop has been reset (so no carts exist yet)"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate directly to /ui/cart/does-not-exist in a fresh unauthenticated browser (simulating a stale bookmarked cart link)",
+          "see": "The cart page for that id renders without items, consistent with an unknown/empty cart view rather than a server crash",
+          "expected_error": false
+        },
+        {
+          "do": "From that page, attempt to submit a checkout form pointed at the same nonexistent cart id with the valid card token",
+          "see": "The page shows an alert stating the cart could not be found, and no order confirmation is produced",
+          "expected_error": true
+        }
+      ],
+      "traces_to": "ui.py#L120-L155 (unknown cart branch)",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [
+    "No README, Makefile, Dockerfile, or explicit launch script was present in the reviewed evidence, so the concrete command to start the demo app as a standalone browser-reachable server (module path, host, port) could not be determined; server.py only shows an in-process ephemeral-port harness (`serve()`) intended for test usage, not a documented standalone CLI invocation.",
+    "No dedicated browser-navigable health-check URL was documented; app.py exposes GET /health as a JSON API endpoint (L92-L94) but no UI page was shown confirming readiness, so health_url could not be confirmed with evidence.",
+    "The full set of valid CARD_TOKENS values beyond 'valid', 'declined', and 'expired' was not shown (import site only, no definition body), so it is unresolved whether other token behaviors exist.",
+    "No environment variables or secrets were referenced anywhere in the reviewed evidence, so required_env could not be populated; confirm whether any exist.",
+    "The exact reset mechanism reachable from the browser (vs. the POST /reset API used by the pytest fixture) was not shown as a UI-navigable action; unresolved whether journeys can rely on a UI-level reset or must depend on the API reset before each journey.",
+    "Startup command is unresolved.",
+    "Startup health URL is unresolved."
+  ],
+  "sources": {
+    "ui.py#L81-L94": "GET /ui shop page form with product dropdown and quantity input, used for add-to-cart journey entry point",
+    "ui.py#L96-L120": "POST /ui/cart/items and GET /ui/cart/{cart_id} routes confirming cart view rendering after adding items",
+    "ui.py#L120-L155": "POST /ui/checkout handler showing unknown-cart, declined, expired (deliberate defect), and successful order confirmation branches",
+    "app.py#L96-L115": "POST /cart/items API behavior for unknown SKU and cart creation, cross-referenced for intended add-to-cart semantics",
+    "app.py#L117-L121": "GET /cart/{cart_id} API behavior for unknown cart, used to corroborate 'unknown cart' UI behavior",
+    "app.py#L123-L154": "POST /checkout/submit API showing declined and expired card branches, including the documented deliberate defect in the expired-card message and cart-clearing behavior",
+    "server.py#L1-L51": "In-process ephemeral-port server harness noted as used for real-origin browser testing; no standalone CLI command documented",
+    "e2e/test_shop_flows.py#L1-L70": "Hand-written end-to-end tests describing intended shopper flows: add item, valid checkout, expired-card preserving cart, unknown SKU rejection"
+  }
+}

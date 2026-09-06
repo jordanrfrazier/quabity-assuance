@@ -1,8 +1,45 @@
 # qabot
 
-An exploratory QA agent that runs in CI. It reads a pull request's diff, works out which
-user-facing workflows are at risk, exercises them against the running app, reports what it
-found, and leaves behind regression tests for whatever it verified.
+A local CLI for reviewing application setup and recording QA journeys in Chrome.
+It reads repository evidence and a change description, proposes an editable plan,
+requires approval, then starts the application and records browser evidence.
+The earlier CI, demo, and anonymous-scan prototypes remain available below.
+
+## Reviewed Browser Journeys
+
+Workspace: `/private/tmp/qabot-cli-2026-09-06`, branch `feature/qabot-journeys-cli`.
+Requires macOS, installed Google Chrome, `uv`, and an authenticated `claude` CLI.
+Journey commands use real Claude/Sonnet calls, not the legacy offline provider.
+
+```sh
+cd /private/tmp/qabot-cli-2026-09-06
+uv sync --extra dev --extra browser
+uv run qabot journeys --help
+
+uv run qabot journeys plan --repo /absolute/application/path --base BASE --head HEAD \
+  --description /absolute/change-description.md --out /absolute/new-plan.json
+uv run qabot journeys approve /absolute/new-plan.json --reviewer "Your name"
+uv run qabot journeys run /absolute/new-plan.json --headed --channel chrome \
+  --out /absolute/new-run-directory
+```
+
+Review the proposed command, environment, prerequisites, actions, and expected
+observations before approving. Generated plans are not trusted test results. Put
+credential references such as `${API_KEY}` in the plan, never values. An optional
+`--env-file /absolute/private/.env` on `run` loads only required names; explicit
+plan flags still win. Login actions must name their credential references.
+
+Each new run writes `report.html`, `report.md`, `results.json`, startup logs,
+screenshots, and per-journey WebM video. Open the HTML directly in Chrome.
+Exit codes are `0` for all PASS, `1` for any FAIL, and `2` for BLOCKED without FAIL
+or an invalid command/approval; Ctrl-C retains partial evidence and exits `130`.
+A correctly observed expected rejection can PASS.
+Changed plans or referenced scripts require renewed approval. An unchanged plan
+can be rerun to a fresh output directory without another approval prompt.
+
+Manual walkthrough: [examples/WALKTHROUGH.md](/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md).
+Product requirements: [docs/PRD.md](/private/tmp/qabot-cli-2026-09-06/docs/PRD.md).
+This is a local pilot, not a production-release certification.
 
 Design: `docs/superpowers/specs/2026-08-27-qa-bot-design.md`
 Decisions and their rationale: `docs/DECISIONS.md`
@@ -13,7 +50,7 @@ Market position and competitive evidence: `docs/STRATEGY.md`
     uv sync --extra dev --extra browser
     uv run playwright install chromium
 
-    uv run pytest                            # 278 tests
+    uv run pytest
     uv run pytest -m "not browser"           # skip the Chromium tier
     uv run qabot demo --source-root .        # the pipeline over HTTP
     uv run qabot demo-browser --source-root . --headed   # ...and through a real browser

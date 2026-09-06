@@ -1,0 +1,103 @@
+{
+  "repo": "/private/tmp/langflow-qabot-release-d14",
+  "base": "d7bd4b55a856216d1074d18e29fad38563158d10",
+  "head": "d14dec904fc55c5e79cfeb8dec2bdf449e638f9d",
+  "description": "Validate the PR14913 lazy component registry through the real Langflow Assistant UI on exact revision d14. The journey signs in, creates a fresh flow, explicitly selects IBM WatsonX granite-4-h-small for the Assistant, accepts its three-component Agent proposal, and receives a real WatsonX Playground response.",
+  "startup": {
+    "command": "/private/tmp/langflow-qabot-release-d14/.venv/bin/langflow run --host 127.0.0.1 --port 7864 --frontend-path /Users/jordan.frazier/Documents/frazier_projects/qa-targets/langflow/src/frontend/build --log-level error --no-open-browser",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:7864/health",
+    "env": {
+      "PYTHONPATH": "/private/tmp/langflow-qabot-release-d14/src/backend/base:/private/tmp/langflow-qabot-release-d14/src/backend:/private/tmp/langflow-qabot-release-d14/src/lfx/src",
+      "LANGFLOW_CONFIG_DIR": "/private/tmp/langflow-qabot-assistant-cli-runtime-v3/config",
+      "LANGFLOW_DATABASE_URL": "sqlite:////private/tmp/langflow-qabot-assistant-cli-runtime-v3/langflow.db",
+      "LANGFLOW_AUTO_LOGIN": "false",
+      "LANGFLOW_LAZY_LOAD_COMPONENTS": "true",
+      "LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false",
+      "LANGFLOW_AGENTIC_EXPERIENCE": "true",
+      "LANGFLOW_DEACTIVATE_TRACING": "true",
+      "DO_NOT_TRACK": "true",
+      "LANGCHAIN_TRACING": "false",
+      "LANGCHAIN_TRACING_V2": "false",
+      "LANGSMITH_TRACING": "false",
+      "LANGSMITH_TRACING_V2": "false",
+      "LANGFLOW_SUPERUSER": "${LANGFLOW_SUPERUSER}",
+      "LANGFLOW_SUPERUSER_PASSWORD": "${LANGFLOW_SUPERUSER_PASSWORD}",
+      "WATSONX_APIKEY": "${WATSONX_APIKEY}",
+      "WATSONX_PROJECT_ID": "dae915e8-c7b7-4ddb-af09-f6757f3e5804",
+      "WATSONX_URL": "https://us-south.ml.cloud.ibm.com"
+    },
+    "required_env": [
+      "LANGFLOW_SUPERUSER",
+      "LANGFLOW_SUPERUSER_PASSWORD",
+      "WATSONX_APIKEY"
+    ],
+    "setup_commands": [],
+    "reset_command": null,
+    "sources": [
+      "Makefile",
+      "src/frontend/src",
+      "src/backend/base/langflow"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "pr14913-assistant-watsonx-flow",
+      "title": "PR14913: Assistant builds and runs a WatsonX Agent flow",
+      "persona": "authenticated Langflow flow builder",
+      "goal": "Use Langflow Assistant to create and run a working Chat Input to Agent to Chat Output flow",
+      "because": "the Assistant must discover and instantiate built-in components correctly while the component registry is lazy",
+      "preconditions": {
+        "settings": {
+          "LANGFLOW_ALLOW_CUSTOM_COMPONENTS": "false",
+          "LANGFLOW_LAZY_LOAD_COMPONENTS": "true",
+          "LANGFLOW_AUTO_LOGIN": "false",
+          "LANGFLOW_AGENTIC_EXPERIENCE": "true"
+        },
+        "state": [
+          "Use the fresh browser context and dedicated database at http://127.0.0.1:7864.",
+          "Sign in only with the reviewed environment references; never invent or display credential values.",
+          "Create a new flow through the visible UI; do not open or modify any existing flow."
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to /, fill Username with ${LANGFLOW_SUPERUSER}, fill Password with ${LANGFLOW_SUPERUSER_PASSWORD}, and submit Sign In once.",
+          "see": "The authenticated Langflow workspace is visible, including either the New Flow control on the projects dashboard or the Create first flow control on a first-run workspace, and the sign-in form has disappeared."
+        },
+        {
+          "do": "Create a separate fresh flow through the visible UI: activate the New Flow button once when the projects dashboard is shown, or activate Create first flow once when the first-run workspace is shown. Do not open or modify an existing flow. Wait for the new flow editor to settle.",
+          "see": "A fresh blank flow editor is visible at a /flow/ URL, with the Langflow Assistant control or its What do you want to build welcome surface available."
+        },
+        {
+          "do": "Open Langflow Assistant if its Assistant prompt is not already visible. Open the displayed current-model selector, then activate the IBM WatsonX menu item named ibm/granite-4-h-small exactly once.",
+          "see": "The visible Langflow Assistant prompt shows ibm/granite-4-h-small as its selected model. A model-performance advisory is acceptable; an authentication or provider-configuration error is not."
+        },
+        {
+          "do": "In the Langflow Assistant textbox, submit exactly this request once: Build a flow with Chat Input connected to Agent connected to Chat Output. Configure the Agent with IBM WatsonX model ibm/granite-4-h-small and the system prompt 'Answer briefly.' Do not add any other components. While generation is active, wait up to 60 seconds for its visible Stop button to become hidden; do not repeatedly read or resubmit.",
+          "see": "Langflow Assistant visibly completes a proposed or live-built flow with exactly ChatInput, Agent, and ChatOutput, reports 3 components and 2 connections, and identifies IBM WatsonX ibm/granite-4-h-small with the system prompt Answer briefly. No authentication, quota, registry, or component-loading error is visible."
+        },
+        {
+          "do": "Apply the completed Assistant proposal once without creating duplicate nodes: activate Add to canvas if offered; otherwise activate Replace canvas if offered on this fresh disposable test flow; otherwise dismiss the completed proposal only if the current canvas already visibly contains exactly the requested three nodes and two connections. Wait for the canvas to settle.",
+          "see": "The canvas visibly contains exactly Chat Input, Agent, and Chat Output connected in that order, with no duplicate nodes. The Agent visibly shows Language Model ibm/granite-4-h-small."
+        },
+        {
+          "do": "Activate Playground once and wait for its chat message textbox to become usable.",
+          "see": "Playground is visible for the current three-component flow with an enabled Send a message textbox."
+        },
+        {
+          "do": "In the Playground textbox, send exactly one message: Reply with exactly: WATSONX VERIFIED. While the flow is running, wait up to 60 seconds for its visible Stop button to become hidden; do not repeatedly read or resubmit.",
+          "see": "The Playground visibly shows the submitted user message followed by a completed real assistant response containing WATSONX VERIFIED. No authentication, quota, missing-model, build, registry, or custom-component error is visible."
+        }
+      ],
+      "traces_to": "https://github.com/langflow-ai/langflow/pull/14913; src/frontend/src; src/backend/base/langflow/services/variable",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [],
+  "sources": {
+    "Makefile": "Startup command reviewed against the exact-revision local application.",
+    "src/frontend/src": "Assistant, canvas proposal, model selector, and Playground behavior under review.",
+    "src/backend/base/langflow": "Lazy component registry and WatsonX-backed flow execution under review."
+  }
+}

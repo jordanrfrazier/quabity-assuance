@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "plan_path": "/private/tmp/qabot-cli-2026-09-06/examples/shop/reviewed-plan.json",
+  "plan_sha256": "6a86bd3008b222552904d5384f819ca0f24d69e874070d52d54d0eec13302265",
+  "reviewer": "Codex agent-reviewed, not human-confirmed",
+  "approved_at": "2026-09-06T17:03:57.089727+00:00",
+  "setup_scripts": {}
+}

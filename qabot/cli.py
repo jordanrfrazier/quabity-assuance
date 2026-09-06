@@ -302,6 +302,9 @@ def cmd_demo_browser(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="qabot", description="QA bot prototype")
     sub = parser.add_subparsers(dest="command", required=True)
+    from qabot.journeys.cli import add_parser
+
+    add_parser(sub)
 
     p_seed = sub.add_parser("seed", help="build a knowledge base from an existing e2e suite")
     p_seed.add_argument("--e2e-dir", required=True)
