@@ -685,6 +685,105 @@ quietly.
 
 ---
 
+## The scan product (2026-09-04)
+
+Design: [2026-09-03-scan-design.md](superpowers/specs/2026-09-03-scan-design.md). Evidence
+in [EVAL.md](EVAL.md).
+
+### D51 — The scan product reuses the oracles and abandons the knowledge base
+**Decided by:** Claude, on the EVAL.md evidence; you approved building it as a second
+product rather than a mode of the first.
+
+The measurement that forced it. Run against real repositories, the expectation tier —
+seeded workflows, graded by provenance-capped `Expectation`s — produced 28 findings across
+CTFd and datasette, and **28 of them were false positives**. The pattern was always the
+same: a seeded assertion is only valid inside the fixtures, configuration and identity of
+the test that produced it, and the knowledge base captures the assertion while discarding
+that context. The intrinsic tier — findings that rest on the application declaring its own
+failure, needing no seeded expectation at all — returned **zero false positives across 120
+routes of two applications** and found two real defects in released software: datasette's
+`assert False` on an unrecognized output format, and CTFd's unguarded `table` query
+parameter in `/admin/export/csv`. One half of this codebase works on code we did not write.
+The other half is 0-for-28. `scan` is the working half, pointed at a buyer the other half
+was never for: someone who built an app — often with an AI — and has no test suite to seed
+from, no fixtures, no `conftest`, and no engineer to read a stack trace. Everything that
+sank the expectation tier is absent by construction, and everything the intrinsic tier
+needs is a URL.
+
+The design consequence. `scan` reuses `qabot/drivers/browser.py`'s `BrowserDriver` and
+`qabot/intrinsics.py` unchanged, and abandons the knowledge base entirely — no `Workflow`,
+no `Expectation`, no seeding, no curator loop. Severity is *derived*, not stored:
+`impact_of` in the new `qabot/scan/grading.py` is a pure lookup on `finding.oracle`, never
+a field written onto a `Finding` and never a match on prose. That keeps `intrinsics.py` and
+`models.py` untouched, so the CI product keeps the epistemic ordering D8 depends on
+(`human_confirmed` → BUG, ..., `inferred_from_code` → QUESTION), and the visitor-impact axis
+this buyer actually needs (BROKEN / GLITCHY / NOTED, ranking a console error above a
+correctly-capped QUESTION) can be re-cut again later without migrating any stored data.
+
+The two `BrowserDriver` changes, and the bug that forced them. I claimed in design
+discussion that `scan` would not touch the driver; that was wrong, and both fixes were
+found against real applications, not imagined.
+
+**(a) The origin filter's noise rule compared every event's host against the host parsed
+out of `base_url` at construction.** Measured on a real app: `snake-survival.lovable.app`
+redirects to `www.snakesurvival.com`, so every console error, failed request and 5xx it
+produced was suppressed as third-party — only its uncaught exception survived, because
+`page_errors` are deliberately exempt from the rule. A vanity domain the app itself
+redirected us to is not a third party, and treating it as one turned the run silently
+empty. Fixed by tracking the *effective* origin: `_hosts` starts as the configured host and
+`_note_origin` adds every host the app has redirected us to during the run, so `_is_noise`
+compares against the set rather than the one name we started with. This makes the CI
+product more correct too — it simply could not surface there, because `base_url` in that
+product is always a server it controls and never redirects away from itself.
+
+**(b) `reset_path` was a plain `str` defaulting to `/reset`, so a scan would have called
+`reset()` and POSTed to a stranger's production server.** `HttpDriver` already took
+`reset_path: str | None` for exactly this reason (`NO_RESET_LIMITATION`); this brought the
+browser driver into line. `scan` always constructs it with `reset_path=None` and states the
+limitation in its report, the same as an `HttpDriver` run against an app with no reset
+endpoint.
+
+The counter-case, honestly. This couples two products to one piece of shared code: a future
+change to `BrowserDriver` for either product's sake must now satisfy both, and a bug fixed
+for one is a bug that was silently live in the other. Both changes above happened to be
+strict improvements with no tradeoff, but the next one may not be, and there is no
+mechanism here beyond the test suite for both products to catch it.
+
+---
+
+### D52 — `sourcemaps.py` stays built and unwired; the report layer's purity is not
+### traded for it in a fix wave
+**Decided by:** the repo owner, on the final whole-branch review's recommendation
+(review finding I7).
+
+`qabot/scan/sourcemaps.py` resolves a minified stack frame back to original file, line
+and symbol, with an honest fallback to the minified frame when it cannot — built exactly
+as spec §5 describes, and tested against its own suite. Nothing calls it. `render_html`
+never receives a resolved frame, so the severity-ceiling problem the spec's §5 opens with
+(the highest-severity signal arriving as `"Wl"`, a mangled symbol) is unfixed in the
+shipped report.
+
+The reason is not an oversight, it is a conflict between two things this branch already
+decided. `report.py`'s docstring states the report is "a pure function of the run" — no
+network, no filesystem beyond an already-captured screenshot path — precisely so it stays
+testable without a browser and without a fixture server. Resolving a source map needs to
+fetch the `.map` file, which is a network call, and the only point in the pipeline that
+already holds a live connection to the app is `sweep`, not `report`. Wiring resolution in
+during a review fix wave would mean choosing, under time pressure, where that fetch
+happens and what report.py's purity claim then means — exactly the kind of design
+decision a fix wave should not make as a side effect of closing a review finding.
+
+So: the module and its tests are left exactly as they are, and the two places that
+claimed otherwise are corrected instead. Spec §5 now states plainly that source-map
+resolution is built and tested but not yet wired into the report, and names the open
+question (most likely home: inside `sweep`, resolving frames as findings are produced, so
+`report.py` keeps receiving already-resolved text and never touches the network itself).
+Spec §7's module table carries the same note next to `sourcemaps.py`. Wiring it is future
+work, scoped as its own change with its own decision about where the fetch lives — not
+retrofitted here.
+
+---
+
 ## Open, deferred to you
 
 - **O1 — Model access and billing.** Does the runner proxy through your API with a scoped

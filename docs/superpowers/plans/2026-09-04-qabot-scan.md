@@ -1247,28 +1247,68 @@ def _safe_to_click(name: str) -> bool:
     return bool(name.strip()) and not any(word in lowered for word in UNSAFE_WORDS)
 
 
-def _click_safely(driver, page) -> list[str]:
-    """Click a bounded sample of safe controls; return the names actually clicked."""
+def _accessible_name(locator) -> str:
+    """The name a user perceives, which is not the same as the element's text.
+
+    A button labelled `aria-label="Close dialog"` whose text is "X" is reachable as
+    "Close dialog" and unreachable as "X" -- so reading text alone yields names the
+    driver cannot then locate, and each one costs a full click timeout to discover.
+    aria-label wins because that is what the accessibility tree exposes.
+    """
+    try:
+        return (locator.get_attribute("aria-label") or locator.inner_text() or "").strip()
+    except Exception:  # noqa: BLE001 -- probing an element must never fail the sweep
+        return ""
+
+
+def _click_safely(driver, page) -> tuple[list[str], list[Observation]]:
+    """Click a bounded sample of safe controls. Returns the names clicked AND the
+    observations those clicks produced.
+
+    **Returning the observations is not a convenience, it is the whole point.** The
+    driver drains its event buffer on every `execute` call, so an error a click causes
+    lands in that click's own Observation and is gone by the time anything reads the
+    page again. A version of this that returned only names would click things and throw
+    away precisely the evidence clicking exists to gather -- the trailing `read` would
+    find an empty buffer and the run would report nothing.
+
+    Two further rules separate a record from a fiction. A name is only used when it
+    resolves to exactly one control: zero means we read a name the accessibility tree
+    does not expose, and more than one is a strict-mode violation the driver would raise
+    on -- both waste a full timeout to learn nothing. And a name is recorded only when
+    the interaction reported `ok`, because `driver.execute` returns a failed Observation
+    rather than raising. Every observation is returned regardless of `ok`, though:
+    events are evidence whether or not the interaction completed, and a page too broken
+    to finish a click is exactly the page whose errors matter most.
+    """
     clicked: list[str] = []
+    observations: list[Observation] = []
     for role in SAFE_CLICK_ROLES:
         try:
-            names = page.get_by_role(role).all_text_contents()
+            candidates = page.get_by_role(role).all()
         except Exception:  # noqa: BLE001 -- probing the page must never fail the sweep
             continue
-        for name in names:
+        for candidate in candidates:
             if len(clicked) >= MAX_CLICKS_PER_PAGE:
-                return clicked
-            name = name.strip()
+                return clicked, observations
+            name = _accessible_name(candidate)
             if not _safe_to_click(name):
                 continue
             try:
-                driver.execute(
+                if page.get_by_role(role, name=name).count() != 1:
+                    continue
+            except Exception:  # noqa: BLE001
+                continue
+            try:
+                observation = driver.execute(
                     Action(kind="browser", params={"op": "click", "role": role, "name": name})
                 )
-                clicked.append(name)
             except DriverError:
-                continue  # a control that would not activate is not a finding here
-    return clicked
+                continue  # a malformed action is an authoring bug, not a finding here
+            observations.append(observation)
+            if observation.ok:
+                clicked.append(name)
+    return clicked, observations
 
 
 def _merge_events(first: Observation, second: Observation) -> Observation:
@@ -1323,7 +1363,13 @@ def sweep(
         settled = driver.execute(Action(kind="browser", params={"op": "read"}))
         observation = _merge_events(observation, settled)
 
-        clicked = _click_safely(driver, driver._page)  # noqa: SLF001 -- see module docstring
+        # Private access is deliberate: BrowserDriver exposes no "what is on this page"
+        # query, and adding one would change shared CI-product code for a scan-only need.
+        clicked, click_observations = _click_safely(driver, driver._page)
+        # Fold in what each click produced. The driver drained those events into the
+        # click's own Observation, so they exist nowhere else by now.
+        for click_observation in click_observations:
+            observation = _merge_events(observation, click_observation)
         if clicked:
             after = driver.execute(Action(kind="browser", params={"op": "read"}))
             observation = _merge_events(observation, after)
@@ -1511,9 +1557,14 @@ NOTHING_CHECKED = (
   `result.not_visited`, `result.stopped`, and the standing anonymous-scan caveat
   ("pages behind a login were not reached; forms were found but not submitted").
 - Escape all interpolated text with `html.escape`.
-- `headline(result)` returns `"No problems found"` when there are no BROKEN or GLITCHY
-  findings, otherwise `"N page(s) is/are broken"` counting distinct
-  `finding.workflow_name` among BROKEN findings, falling back to a glitch count.
+- `headline(result)` has three branches, each saying only what is true: no BROKEN and no
+  GLITCHY findings → `"No problems found"`; one or more BROKEN → `"N page is broken"` /
+  `"N pages are broken"` counting distinct `finding.workflow_name` among BROKEN findings;
+  zero BROKEN with one or more GLITCHY → `"N page has problems"` / `"N pages have
+  problems"`, counted the same way over GLITCHY. A glitch-only scan must never be
+  headlined as broken — the headline is the one sentence this reader is guaranteed to
+  read, and the Broken/Glitchy split is the whole reason the scan has its own severity
+  axis rather than inheriting the CI product's.
 
 - [ ] **Step 4: Run tests to verify they pass**
 

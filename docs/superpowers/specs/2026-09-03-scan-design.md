@@ -103,8 +103,18 @@ Four sources, in descending order of trust:
    from three real bundles.
 2. **`sitemap.xml`**, when present. Authoritative and cheap.
 3. **`robots.txt`** — read for `Sitemap:` directives and honoured for exclusions.
-4. **`a[href]` on every page visited.** The fallback, and on an SPA landing page it finds
-   almost nothing, which is why it cannot be the only source.
+4. **`a[href]` on the root page.** The fallback, and on an SPA landing page it finds almost
+   nothing, which is why it cannot be the only source — but it is the *only* source for a
+   server-rendered site, and one measured app in the spike yielded all four of its pages this
+   way with zero bundle routes and no sitemap.
+
+   **Scoped to one hop, deliberately.** Discovery is a pure, browser-free unit, which is what
+   lets it be tested without Chromium; reading anchors from every page as it is visited would
+   require a live browser and would move the paths list out of `Discovery`, taking the
+   per-source counts with it. So links rendered by JavaScript are not seen, and a page two hops
+   from the root is not reached. Both are real limitations of v1 and are stated in the report
+   rather than papered over. One hop was empirically sufficient for every app measured in the
+   spike.
 
 Discovery is a distinct, separately testable unit: `discover(root_url) -> Discovery`,
 where `Discovery` carries the paths **and the per-source counts**. The counts are not
@@ -202,6 +212,16 @@ file, line and symbol is the difference between a finding a builder can act on a
 Fetch the map for the frame's bundle, resolve, and **fall back to the minified frame with
 that fact stated** — never silently present an unresolved frame as if it were resolved.
 
+**Status: built and tested, not yet wired into the report.** `qabot/scan/sourcemaps.py`
+implements resolution and the honest fallback described above, against its own test
+suite. Connecting it to `render_html` needs network access during rendering to fetch a
+`.map` file, and `report.py` being a pure function of a `ScanResult` — no network, no
+filesystem beyond an already-captured screenshot path — is a stated design property this
+codebase is not breaking to land one feature. Where that fetch belongs (in `sweep`,
+resolving frames as findings are produced, so `report.py` stays pure and receives
+already-resolved text) is an open design question, not a bug in the module as it stands.
+See `docs/DECISIONS.md` D52.
+
 ---
 
 ## 6. Report
@@ -235,6 +255,7 @@ qabot/scan/
   sweep.py       drive one app: budget, safe interactions, evidence collection
   grading.py     oracle -> scan severity; the blank_page oracle
   sourcemaps.py  minified frame -> original file/line/symbol, or an honest failure
+                 (built, tested, not yet wired into the report -- see §5)
   report.py      findings -> a self-contained HTML page
   cli.py         `qabot scan <url> --out report.html`
 ```

@@ -92,6 +92,13 @@ EVENT_EVIDENCE_LIMIT = 20
 #: The event categories captured, and the order they appear in evidence.
 EVENT_KINDS = ("page_errors", "console_errors", "failed_requests", "server_errors")
 
+#: Carried on the run when the caller declared the app has no reset endpoint.
+NO_RESET_LIMITATION = (
+    "the app has no reset endpoint, so pages were visited in sequence against whatever "
+    "state earlier ones left behind: a finding here may depend on that accumulated "
+    "state, and visiting the same pages in another order may not reproduce it"
+)
+
 #: First `http(s)://host/file.js:LINE:COL` in a stack trace. Uncaught exceptions reach
 #: us as a message plus a stack and nothing else, so this is the only way to say where
 #: one came from -- and a "where" is the difference between a report a developer can
@@ -114,7 +121,7 @@ class BrowserDriver:
         page: Page,
         artifacts_dir: Path | None = None,
         timeout_ms: float = 5000.0,
-        reset_path: str = "/reset",
+        reset_path: str | None = "/reset",
     ):
         self.base_url = base_url.rstrip("/")
         self._page = page
@@ -126,6 +133,13 @@ class BrowserDriver:
         self._shot_counter = 0
         #: The host the app under test is served from -- the whole of the origin rule.
         self._host = urlsplit(self.base_url).hostname
+        #: Every host this app has served us from. The configured one seeds it; a
+        #: redirect adds to it. See `_note_origin` for why this is a set and not a
+        #: constant.
+        self._hosts: set[str] = {self._host} if self._host else set()
+        #: What this driver could not guarantee about the run. The caller reads it and
+        #: the report prints it; opting out of reset is stated, never swallowed.
+        self.limitations: list[str] = [] if reset_path is not None else [NO_RESET_LIMITATION]
         self._clear_events()
         page.on("pageerror", self._guard(self._on_page_error))
         page.on("console", self._guard(self._on_console))
@@ -133,11 +147,20 @@ class BrowserDriver:
         page.on("response", self._guard(self._on_response))
 
     def reset(self) -> None:
-        """Clear server state and start from a blank browser context.
+        """Return the app to a known state, if it has one to return to.
 
-        Loud on failure, for the same reason as the HTTP driver: a run that begins
-        from an unknown state produces findings nobody can act on.
+        Loud on failure, because a run that starts from an unknown state produces
+        findings nobody can trust. That is exactly why opting out is a constructor
+        argument rather than a rescued exception: no third-party app has a `/reset`
+        endpoint, and treating its 404 as "fine" would turn every foreign run into the
+        untrustworthy kind without anyone deciding to. `reset_path=None` is the caller
+        deciding to, once, in the open. Cookies are still cleared -- that is our own
+        browser state, and clearing it asks nothing of the app.
         """
+        if self._reset_path is None:
+            self._page.context.clear_cookies()
+            self._clear_events()
+            return
         try:
             response = self._page.request.post(f"{self.base_url}{self._reset_path}")
         except Exception as exc:  # playwright raises a broad Error type
@@ -356,6 +379,34 @@ class BrowserDriver:
             {"url": response.url, "method": response.request.method, "status": response.status},
         )
 
+    def _note_origin(self) -> None:
+        """Record the host actually serving the page as one of the app's own.
+
+        The origin rule drops events from hosts the app's team cannot fix. A host the
+        app itself redirected the browser to fails that description: it is the app,
+        wearing its production name. Called from `_is_noise` -- at judgement time,
+        not after the fact -- because a load-time event (a console.error the page's
+        own inline script raises before `load` fires) is judged *while `goto` is
+        still running*, long before an `_observe` gets a chance to look. `page.url` is
+        already the post-redirect URL by then, so reading it here rather than caching
+        it after the interaction is what makes the very first event from a redirected
+        origin count as the app's own instead of being lost to the race.
+
+        This also covers a client-side route change that swaps origin, for free.
+
+        WHY not a `framenavigated` listener instead, keeping this predicate pure: that
+        event fires for every frame, not just the top one, so an ad in an iframe
+        navigating would add *its* host to the app's own set -- whitelisting exactly
+        what the filter exists to remove. `page.url` is the main frame's URL by
+        definition, so reading it here is immune to that for free.
+        """
+        try:
+            host = urlsplit(self._page.url).hostname
+        except Exception:  # noqa: BLE001 -- a dead page must not lose the event being judged
+            return
+        if host:
+            self._hosts.add(host)
+
     def _is_noise(self, url: str) -> bool:
         """The whole filter, in one predictable pair of rules.
 
@@ -363,10 +414,11 @@ class BrowserDriver:
         else, and suppressing on absent evidence is exactly the guess this filter
         exists to avoid.
         """
+        self._note_origin()
         parts = urlsplit(url or "")
         if parts.path.rsplit("/", 1)[-1].startswith("favicon."):
             return True
-        return bool(parts.hostname) and parts.hostname != self._host
+        return bool(parts.hostname) and parts.hostname not in self._hosts
 
     def _record(self, kind: str, event: dict[str, object]) -> None:
         """Count first, store second.
