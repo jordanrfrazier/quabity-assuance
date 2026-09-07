@@ -1,17 +1,42 @@
 # qabot Current State
 
-Last assessed: 2026-09-06.
+Last assessed: 2026-09-07.
 Directory: `/private/tmp/qabot-cli-2026-09-06`.
-Branch: `feature/qabot-journeys-cli`. Current HEAD: `df7d2d4` (uncommitted implementation).
-Original workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`,
-branch `feature/qabot-scan`; its earlier edits are preserved.
+Branch: `feature/qabot-journeys-cli`. Pre-merge HEAD: `a4df6a6` (review fixes committed).
+Incoming main revision: `ce0cede56e80f524d677ddf1b7de89eca4464f88`.
+Original workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
 Initial code/test assessment was performed at `ccc3698` with the existing working tree.
+
+## Authorized Implementation Worktree
+
+Jordan subsequently authorized building the local CLI and iterating with a team
+until real browser/video examples work. Implementation, the updated PRD, and full
+current build status are at `/private/tmp/qabot-cli-2026-09-06`, branch
+`feature/qabot-journeys-cli`. The following handoff links from main are retained
+alongside the implementation and review history in this document.
+
+- Current implementation state: `/private/tmp/qabot-cli-2026-09-06/qabot_current_state.md`.
+- Manual walkthrough: `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`.
+- Updated PRD: `/private/tmp/qabot-cli-2026-09-06/docs/PRD.md`.
+- Actual shop report: `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/shop-20260906-final/report.html`.
+- Repeated Assistant PASS: `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/langflow-assistant-20260906-1348-repeat/report.html`.
+- Editor PASS with exact submitted input and real response: `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/langflow-editor-20260906-final3/report.html`.
+- PR14931 browser FAIL (missing policy explanation): `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/langflow-diagnostic-run1/report.html`.
+
+The packaged CLI discovers/reviews startup plans, starts local applications, records
+real Chrome journeys, and writes local HTML/JSON/Markdown evidence. The September 6
+validation recorded 649 passed tests, 1 legacy live-model test deselected, and
+independently verified editor and Assistant videos. The walkthrough is ready;
+production acceptance remains separate. The prepared manual shop used
+`http://127.0.0.1:7888/ui`; its current availability was not rechecked during this
+documentation merge. Later review fixes and verification are recorded below.
 
 ## Current Objective
 
-The overarching objective is a production-grade PRD. The authorized build is now
-the active task: deliver a working local
-CLI and real browser/video walkthrough, then use its findings to refine the PRD.
+The overarching objective is a production-grade PRD, informed by the implemented
+local CLI and real browser/video walkthrough. The current task is to resolve the
+documentation conflicts from main and commit the merge, preserving the pilot
+requirements, evidence, and review fixes.
 
 Jordan confirmed the following product scope on 2026-09-06:
 
@@ -21,7 +46,7 @@ test environment, and reports evidence plus anything it could not verify.
 
 Anonymous scanning and automatic merge blocking are outside the first release.
 The PRD draft is at
-[/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/PRD.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/PRD.md).
+[/private/tmp/qabot-cli-2026-09-06/docs/PRD.md](/private/tmp/qabot-cli-2026-09-06/docs/PRD.md).
 Product direction and local CLI delivery are confirmed. Jordan will evaluate CLI
 usability before pursuing a local web interface. The PRD now proposes an end-to-end
 CLI acceptance path: generate, review/edit, run a selected journey, inspect evidence,
@@ -42,7 +67,7 @@ setup blocks the affected tests with a concrete missing requirement.
 The PRD now includes startup discovery, reviewed execution, and setup lifecycle
 requirements FR-15 through FR-17, with AC-11 and AC-12. AC-08 includes Jordan's
 review of the startup plan and qabot-managed startup. D-02 is resolved; the set
-of supported local setups remains D-04.
+of supported local setups was subsequently accepted under D-04 for the pilot.
 
 Jordan confirmed D-03: explicit approval once per startup-plan/journey version,
 unchanged reruns without another prompt, and renewed review after execution-affecting
@@ -53,11 +78,11 @@ approval reuse and stale-approval rejection. Application revision and approved
 procedure identity remain separate so the same journey can compare broken/fixed
 builds; changed executable setup inputs still require renewed review.
 
-The next question, D-04, is pending. Recommendation, not accepted: macOS and Chromium,
+D-04 was accepted by the subsequent build instruction: macOS and Chrome/Chromium,
 local Git repo with base/head revisions and optional change description, validated
-on Langflow plus one unrelated web app. Alternatives are Langflow-only initially
-or supporting macOS and Linux from the first release. Exact supported local setup
-types must also be defined once the release scope is selected.
+on Langflow plus the bundled shop. Setup uses reviewed local commands, existing
+host tools, supplied secrets, and readiness checks. This pilot scope does not
+establish general infrastructure provisioning or cross-platform support.
 
 Supplied environment variables must be distinguished from effective runtime
 configuration; source, verification status, and unknown values matter. A readiness
@@ -218,12 +243,11 @@ Plan: `/private/tmp/qabot-cli-2026-09-06/docs/superpowers/plans/2026-09-06-journ
 - The worktree's untracked `.venv` is a symlink to the original environment, synchronized with dev/browser/llm extras; the editable install points here. Run walkthrough commands from this worktree. Do not stage the `.venv` symlink in any later commit. Original source edits remain preserved; only its state-file handoff pointer was added by this build.
 - Build handoff is ready: `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md` includes exact commands, videos, repeat instructions and known boundaries. All four example approvals validate; all test-owned app ports are stopped. Only the separate manual shop on 7888 remains running intentionally. Next: Jordan performs the walkthrough and adjudicates the PR14931 browser failure; resolve PRD release gates, including generic action fidelity, configuration/dependency attestation, independent approvals, and accuracy/cost/retention ownership. Do not call the pilot production-certified.
 
-Current HEAD is `df7d2d4` (`docs`), a commit made outside this agent's actions.
-The PRD and state file have unstaged edits; Spec Kit and agent configuration are
-untracked. Preserve that work. No staging or commits were performed by this agent.
-Spec Kit's constitution remains an unfilled template; no feature spec/plan/tasks
-set was found. The PRD draft was created after the scope confirmation. Local run
-evidence is gitignored.
+Historical discovery checkpoint: HEAD was `df7d2d4` (`docs`), with unstaged PRD/state
+edits and untracked Spec Kit/agent configuration. No staging or commits were
+performed during that discovery session. Spec Kit's constitution was an unfilled
+template; no feature spec/plan/tasks set was found. The PRD draft was created after
+the scope confirmation. Local run evidence is gitignored.
 
 1. D-04 initial pilot scope is accepted; validate its local CLI, Chrome, repository,
    and reviewed startup boundaries against the walkthrough.
@@ -306,3 +330,22 @@ publishing, messages to others, or ticket changes were performed.
   walkthrough. The new tier regression file is untracked and must be included
   with the source changes in any later user-authorized commit. No commits, pushes
   or remote review comments were made by this fix session.
+
+## Main Merge Resolution - 2026-09-07
+
+- Jordan requested conflict resolution and a local merge commit. The in-progress
+  merge combines feature head `a4df6a6` with main revision
+  `ce0cede56e80f524d677ddf1b7de89eca4464f88`; no newer revision was substituted.
+- Conflicts were limited to `/private/tmp/qabot-cli-2026-09-06/docs/PRD.md` and
+  `/private/tmp/qabot-cli-2026-09-06/qabot_current_state.md`. Kept the accepted D-04
+  pilot scope, implementation evidence, remaining release gates, and PR #2 review
+  and fix history. Preserved main's handoff links and labeled older status claims
+  as historical rather than reverting the project to its pre-build state.
+- The prior fixes are already committed in `a4df6a6`, including the tier regression
+  file and `.venv` tracking removal. Earlier unstaged/untracked notes describe the
+  prior session, not the current merge state.
+- No application code, dependencies or tests changed during resolution. Validation
+  is scoped to conflict-marker, whitespace, and staged-diff checks; application
+  tests and live model/browser scenarios were not rerun for this docs-only merge.
+- Next: complete the authorized local merge commit, then continue Jordan's manual
+  walkthrough and PRD decisions D-05 through D-08. No push or publication is authorized.

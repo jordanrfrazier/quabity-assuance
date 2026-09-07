@@ -344,8 +344,8 @@ proposals for discussion.
 | D-07 | Quantitative quality, time, and cost thresholds; independent adjudication method and evaluation corpus. | Metrics and candidate cases listed; no target numbers accepted. | A measurable release decision. |
 | D-08 | Initial release audience, rollout stages, acceptance owner, and support/rollback responsibility. | Jordan is the first CLI usability evaluator. Broader release audience and operating responsibilities remain undecided. | Release plan and operational readiness. |
 
-Next drafting step: select the supported inputs and local application setups under
-D-05 through D-08. The local pilot below supplies implementation evidence; it does
+Next drafting step: resolve the outcome, data-handling, quality, and release decisions
+under D-05 through D-08. The local pilot below supplies implementation evidence; it does
 not silently settle release ownership, quality thresholds, or privacy policy.
 Once these are agreed, complete the production requirements and validation thresholds,
 check requirement-to-acceptance traceability, and submit the complete PRD for review.
