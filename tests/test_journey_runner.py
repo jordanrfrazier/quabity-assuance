@@ -91,9 +91,11 @@ def test_stale_approval_prevents_output_or_launch(tmp_path):
     assert not (tmp_path / "run").exists()
 
 
+@pytest.mark.browser
 def test_real_chrome_run_records_playable_video_and_cleans_process(tmp_path, free_tcp_port):
     import httpx
-    from playwright.sync_api import sync_playwright
+
+    sync_playwright = pytest.importorskip("playwright.sync_api").sync_playwright
 
     path = make_plan(tmp_path, free_tcp_port)
     llm = Decisions(
@@ -118,8 +120,8 @@ def test_real_chrome_run_records_playable_video_and_cleans_process(tmp_path, fre
         httpx.get(f"http://127.0.0.1:{free_tcp_port}", timeout=1)
 
 
-def test_missing_secret_writes_blocked_report(tmp_path, free_tcp_port):
-    path = make_plan(tmp_path, free_tcp_port)
+def test_missing_secret_writes_blocked_report(tmp_path):
+    path = make_plan(tmp_path, 9876)
     data = json.loads(path.read_text())
     data["startup"]["required_env"] = ["ABSENT_QABOT_TEST_SECRET"]
     path.write_text(json.dumps(data))
@@ -131,7 +133,9 @@ def test_missing_secret_writes_blocked_report(tmp_path, free_tcp_port):
     assert "ABSENT_QABOT_TEST_SECRET" in report["results"][0]["why"]
 
 
+@pytest.mark.browser
 def test_later_driver_error_preserves_completed_steps_in_report(tmp_path, free_tcp_port):
+    pytest.importorskip("playwright.sync_api")
     path = make_plan(tmp_path, free_tcp_port)
     data = json.loads(path.read_text())
     data["journeys"][0]["steps"].append({"do": "Go next", "see": "Next page"})
@@ -153,7 +157,9 @@ def test_later_driver_error_preserves_completed_steps_in_report(tmp_path, free_t
     assert Path(result["video"]).is_file()
 
 
+@pytest.mark.browser
 def test_interrupt_preserves_partial_steps_video_and_stops_later_journeys(tmp_path, free_tcp_port):
+    pytest.importorskip("playwright.sync_api")
     path = make_plan(tmp_path, free_tcp_port)
     data = json.loads(path.read_text())
     data["journeys"][0]["steps"].append({"do": "Read more", "see": "More"})
@@ -225,9 +231,11 @@ def test_stop_kills_descendant_even_when_launcher_exits_on_term():
         process.wait(timeout=5)
 
 
+@pytest.mark.browser
 def test_env_file_secret_reflections_are_redacted_before_first_model_call_and_report(
     tmp_path, free_tcp_port
 ):
+    pytest.importorskip("playwright.sync_api")
     secret = "dummy-reflected-server-api-key"
     (tmp_path / "index.html").write_text(f"<h1>Build failed: {secret}</h1>")
     env_file = tmp_path / ".env"
@@ -259,9 +267,11 @@ def test_env_file_secret_reflections_are_redacted_before_first_model_call_and_re
     assert "[REDACTED]" in result["steps"][0]["reason"]
 
 
+@pytest.mark.browser
 def test_startup_log_redacts_url_encoded_secret(tmp_path, free_tcp_port, monkeypatch):
     from urllib.parse import quote
 
+    pytest.importorskip("playwright.sync_api")
     secret = "sensitive startup / key"
     encoded = quote(secret, safe="")
     monkeypatch.setenv("API_KEY", secret)

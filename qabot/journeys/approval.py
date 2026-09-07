@@ -92,7 +92,10 @@ def _script_tokens(command: str) -> list[str]:
         else:
             command_position = False
     expanded: list[str] = []
-    for token in tokens:
+    for index, token in enumerate(tokens):
+        if index and tokens[index - 1] in {"-c", "-lc", "-ec"}:
+            expanded.extend(_script_tokens(token))
+            continue
         expanded.append(token)
         if any(char.isspace() for char in token):
             try:
@@ -116,7 +119,7 @@ def _looks_like_script(token: str) -> bool:
     path = Path(token)
     if path.suffix:
         return path.suffix.lower() in _SCRIPT_SUFFIXES
-    return token.startswith(("./", "../"))
+    return "/" in token
 
 
 def _script_identities(plan: ReviewPlan, plan_path: Path) -> dict[str, str]:

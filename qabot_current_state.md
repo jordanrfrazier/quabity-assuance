@@ -240,3 +240,69 @@ Earlier discovery-session changes: the PRD draft and this state file, renamed fr
 to match Jordan's updated naming instruction. The subsequent authorized build adds
 application code and tests only in the isolated worktree above. No commits, pushes,
 publishing, messages to others, or ticket changes were performed.
+
+## PR #2 Review Checkpoint - 2026-09-06
+
+- User requested an independent GPT-5.5 review and a manual walkthrough checklist,
+  not implementation changes or a published GitHub review.
+- Reviewed directory: `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, head `8ab39ec17bebfec65790ce5896eba26bdd94260a`,
+  PR base `ce0cede56e80f524d677ddf1b7de89eca4464f88`. This supersedes the older
+  pre-commit HEAD/status notes above for this review checkpoint.
+- GPT-5.5 findings, checked by root: direct extensionless `sh scripts/setup`
+  references are omitted from approval script identities, so changing their
+  executable contents does not invalidate approval; `.venv` is now tracked as an
+  absolute machine-local symlink; new journey browser tests lack browser-tier
+  markers and import Playwright unconditionally through shared test helpers.
+- Dropped a proposed symbolic-HEAD approval finding after checking PRD section 4:
+  another application revision may reuse an unchanged reviewed procedure/profile,
+  and the runner records the actual source SHA. Package-manager script indirection
+  remains an explicitly documented release gap, distinct from the direct-script bug.
+- Fresh verification: the six journey test modules passed all 80 tests in 88.72s,
+  including real Chrome video playback and cleanup. Non-browser collection still
+  selects all 47 runner/walker tests, confirming the tier regression. All four
+  example approvals validate, existing report videos remain present, and the
+  separate manual shop at `http://127.0.0.1:7888/ui` returned HTTP 200.
+- No live Claude/Watsonx or Langflow end-to-end reruns were performed during this
+  review. Earlier recorded results remain historical evidence, not fresh runs.
+- Recommended manual order: shop review/approve/run and PASS/PASS/FAIL evidence;
+  stale-plan/script, missing-env, occupied-port and cancellation guardrails;
+  Langflow editor and Assistant creation with exact inputs and completed real
+  inference; PR14931 browser diagnostic FAIL adjudication; fresh discovery and
+  configuration/source-evidence review; clean-checkout installation and rerun.
+- Next: fix the three substantiated review findings before merge, then Jordan
+  performs `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`. Resolve
+  production PRD decisions D-05 through D-08 separately. Only this state document
+  was edited during review; no code fixes, commits, pushes or remote comments.
+
+## PR #2 Review Fixes - 2026-09-07
+
+- User authorized fixing all three substantiated review findings. Work remains in
+  `/private/tmp/qabot-cli-2026-09-06`, branch `feature/qabot-journeys-cli`, based on
+  `8ab39ec17bebfec65790ce5896eba26bdd94260a`. Prior review notes are preserved above.
+- Approval now hashes path-like extensionless script references, including
+  relative and absolute paths in startup, setup and reset commands. Nested shell
+  command strings are expanded before scanning so they are not mistaken for a
+  single filename. Changed scripts invalidate approval; missing referenced paths
+  fail before approval. Package-manager indirection remains outside this fix.
+- Removed `.venv` from the Git index with `git rm --cached`; the local environment
+  and symlink remain intact. `.gitignore` now ignores `.venv` whether it is a
+  directory, file or symlink. Only this removal is staged; no commit was made.
+- Browser-dependent runner/walker tests now carry the browser marker and import
+  Playwright lazily. Pure configuration, approval and redaction tests remain in
+  the non-browser tier. The missing-credential test no longer requests an unused
+  port fixture before its pre-startup failure.
+- Added approval regressions covering startup/setup/reset, relative/absolute and
+  nested shell references, plus missing scripts. Added
+  `/private/tmp/qabot-cli-2026-09-06/tests/test_journey_test_tiers.py`, which runs the
+  non-browser runner/walker tests in a subprocess with Playwright unavailable and
+  third-party pytest plugin autoload disabled. Regressions failed before fixes.
+- Final verification: 33 non-browser tests passed (38 deselected) in 0.74s;
+  38 real Chrome tests passed (9 deselected) in 84.20s. Ruff passed on all edited
+  Python files. Git confirms `.venv` is ignored and absent from the index.
+- GPT-5.5 independently reviewed the fix diff with no findings and passed the
+  24 approval/tier-guard tests. No live Langflow/provider reruns were performed.
+- Next: Jordan reviews the local changes and performs the documented manual
+  walkthrough. The new tier regression file is untracked and must be included
+  with the source changes in any later user-authorized commit. No commits, pushes
+  or remote review comments were made by this fix session.

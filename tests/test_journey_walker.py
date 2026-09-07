@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import sync_playwright
 
 from qabot.drivers.base import Action
 from qabot.drivers.browser import BrowserDriver
@@ -27,6 +26,7 @@ class Decisions:
 
 @pytest.fixture
 def page():
+    sync_playwright = pytest.importorskip("playwright.sync_api").sync_playwright
     with sync_playwright() as pw:
         browser = pw.chromium.launch(channel="chrome")
         page = browser.new_page()
@@ -43,6 +43,7 @@ def journey(**step_fields):
     )
 
 
+@pytest.mark.browser
 def test_decision_prompt_treats_quoted_input_as_literal_data(page):
     from qabot.journeys.walker import _decide
 
@@ -64,6 +65,7 @@ def test_decision_prompt_treats_quoted_input_as_literal_data(page):
     assert _decide(CheckPrompt(), item, 0, page, [])["value"] == literal
 
 
+@pytest.mark.browser
 def test_expected_error_is_judged_not_automatically_failed(page, tmp_path):
     page.set_content("<h1>Build failed</h1><p>Custom components are disabled</p>")
     llm = Decisions(
@@ -75,6 +77,7 @@ def test_expected_error_is_judged_not_automatically_failed(page, tmp_path):
     assert result.steps[0].findings  # Error evidence must remain visible.
 
 
+@pytest.mark.browser
 def test_unexpected_error_is_still_failure(page, tmp_path):
     page.set_content("<h1>Build failed</h1>")
     llm = Decisions(
@@ -84,6 +87,7 @@ def test_unexpected_error_is_still_failure(page, tmp_path):
     assert result.outcome == Outcome.FAIL
 
 
+@pytest.mark.browser
 def test_ambiguous_click_does_not_click_arbitrary_match(page, tmp_path):
     page.set_content(
         "<button onclick=\"document.title='clicked'\">Add</button><button>Add</button>"
@@ -98,6 +102,7 @@ def test_ambiguous_click_does_not_click_arbitrary_match(page, tmp_path):
     assert result.outcome == Outcome.BLOCKED
 
 
+@pytest.mark.browser
 def test_model_failure_preserves_completed_actions(page, tmp_path):
     page.set_content("<p>Current state</p>")
     llm = Decisions({"op": "read"}, LLMError("model unavailable"))
@@ -126,6 +131,7 @@ def test_secret_preconditions_resolve_without_leaking_mismatch():
     assert "different" not in str(errors)
 
 
+@pytest.mark.browser
 def test_press_and_scoped_controls_work_without_first_match(page, tmp_path):
     from qabot.journeys.runner import JourneyBrowserDriver
 
@@ -160,6 +166,7 @@ def test_press_and_scoped_controls_work_without_first_match(page, tmp_path):
     assert [a.op for a in result.steps[0].actions] == ["press", "click"]
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize("second_tabindex, succeeds", [(-1, True), (0, False)])
 def test_press_disambiguates_only_unique_sequential_tab_stop(
     page, tmp_path, second_tabindex, succeeds
@@ -187,6 +194,7 @@ def test_press_disambiguates_only_unique_sequential_tab_stop(
     assert (page.title() == "added") is succeeds
 
 
+@pytest.mark.browser
 def test_repeated_shift_arrow_moves_selected_node_as_one_recorded_action(page, tmp_path):
     page.route(
         "http://localhost/**",
@@ -224,6 +232,7 @@ def test_repeated_shift_arrow_moves_selected_node_as_one_recorded_action(page, t
     assert Path(movement.screenshot).is_file()
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize(
     "key, repeat",
     [
@@ -253,6 +262,7 @@ def test_invalid_repeated_press_fails_before_browser_input(page, tmp_path, key, 
         )
 
 
+@pytest.mark.browser
 def test_reflected_secrets_never_reach_model_or_text_results(page, tmp_path):
     secret = "dummy-sensitive-api-key"
 
@@ -294,6 +304,7 @@ def test_reflected_secrets_never_reach_model_or_text_results(page, tmp_path):
     assert "${API_KEY}" in result.model_dump_json()
 
 
+@pytest.mark.browser
 def test_secret_equal_to_outcome_does_not_corrupt_structural_values(page, tmp_path):
     page.route(
         "http://localhost/**",
@@ -326,6 +337,7 @@ def test_redaction_covers_json_and_url_encoded_secret_evidence():
     assert redact_text("${PASSWORD}", ["PASS"]) == "${PASSWORD}"
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize(
     "name, allowed", [("API_KEY", False), ("PASSWORD", False), ("USERNAME", True)]
 )
@@ -352,6 +364,7 @@ def test_secret_reference_requires_masked_input_but_username_does_not(
         assert page.get_by_role("textbox").input_value() == ""
 
 
+@pytest.mark.browser
 def test_wait_observes_delayed_enabled_control_and_retains_screenshot(page, tmp_path):
     page.route(
         "http://localhost/**",
@@ -381,6 +394,7 @@ def test_wait_observes_delayed_enabled_control_and_retains_screenshot(page, tmp_
     assert Path(result.steps[0].screenshot).is_file()
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize("timeout", [0, 60001, "1000", True])
 def test_wait_rejects_invalid_timeout_before_browser_action(page, tmp_path, timeout):
     driver = JourneyBrowserDriver("http://localhost", page, tmp_path)
@@ -399,6 +413,7 @@ def test_wait_rejects_invalid_timeout_before_browser_action(page, tmp_path, time
         )
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize("expected_error", [False, True])
 def test_delayed_browser_exception_cannot_pass_after_settle(page, tmp_path, expected_error):
     page.set_content(
@@ -421,6 +436,7 @@ def test_delayed_browser_exception_cannot_pass_after_settle(page, tmp_path, expe
     assert any(f.oracle == "browser_page_error" for f in result.steps[0].findings)
 
 
+@pytest.mark.browser
 def test_driver_exception_retains_actions_in_current_step(page, tmp_path):
     page.set_content("<p>Current state</p>")
     llm = Decisions({"op": "read"}, {"op": "goto", "path": "https://outside.example/"})
@@ -432,6 +448,7 @@ def test_driver_exception_retains_actions_in_current_step(page, tmp_path):
     assert Path(result.steps[0].actions[0].screenshot).is_file()
 
 
+@pytest.mark.browser
 def test_cross_origin_secret_fill_is_rejected_before_input(page):
     page.route(
         "**/*",
@@ -456,6 +473,7 @@ def test_cross_origin_secret_fill_is_rejected_before_input(page):
     assert page.locator("input").input_value() == ""
 
 
+@pytest.mark.browser
 def test_cross_origin_top_level_navigation_is_blocked_but_assets_are_allowed(page):
     reached = []
 
@@ -480,6 +498,7 @@ def test_cross_origin_top_level_navigation_is_blocked_but_assets_are_allowed(pag
     assert "http://assets.example/asset" in reached
 
 
+@pytest.mark.browser
 @pytest.mark.parametrize(
     "disposition, expected", [(None, Outcome.BLOCKED), ("expected", Outcome.PASS)]
 )

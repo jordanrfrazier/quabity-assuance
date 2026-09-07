@@ -67,6 +67,37 @@ def test_changed_referenced_setup_script_invalidates_approval(tmp_path):
         require_approval(plan_path)
 
 
+@pytest.mark.parametrize("field", ["command", "setup_commands", "reset_command"])
+@pytest.mark.parametrize("path_style", ["relative", "absolute", "nested"])
+def test_changed_extensionless_script_invalidates_approval(tmp_path, field, path_style):
+    plan_path, original = _write_plan(tmp_path)
+    script = original.with_suffix("")
+    original.rename(script)
+    token = str(script) if path_style == "absolute" else "scripts/setup"
+    command = f'sh -c "sh {token}"' if path_style == "nested" else f"sh {token}"
+    parsed = json.loads(plan_path.read_text())
+    parsed["startup"]["setup_commands"] = []
+    parsed["startup"][field] = [command] if field == "setup_commands" else command
+    plan_path.write_text(json.dumps(parsed))
+    approve_plan(plan_path, "test")
+    require_approval(plan_path)
+
+    script.write_text("#!/bin/sh\necho changed\n")
+
+    with pytest.raises(ApprovalError, match="setup script"):
+        require_approval(plan_path)
+
+
+def test_missing_extensionless_script_cannot_be_approved(tmp_path):
+    plan_path, _ = _write_plan(tmp_path)
+    parsed = json.loads(plan_path.read_text())
+    parsed["startup"]["command"] = "sh scripts/missing"
+    plan_path.write_text(json.dumps(parsed))
+
+    with pytest.raises(ApprovalError, match="script does not exist"):
+        approve_plan(plan_path, "test")
+
+
 def test_changed_plan_invalidates_approval(tmp_path):
     plan_path, _ = _write_plan(tmp_path)
     approve_plan(plan_path, reviewer="Jordan")
