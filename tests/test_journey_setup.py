@@ -179,6 +179,23 @@ def test_subdirectory_discovery_does_not_import_unrelated_root_diff(tmp_path):
     assert "FICTIONAL_PAYMENT_SERVICE" not in prompt
 
 
+def test_discovery_ignores_project_local_worktrees(tmp_path):
+    repo = _repo(tmp_path)
+    nested = repo / ".worktrees" / "other-checkout" / "tests"
+    nested.mkdir(parents=True)
+    (nested / "test_flow.py").write_text(
+        "def test_flow():\n"
+        "    assert 'changed flow uses FICTIONAL_NESTED_WORKTREE_SERVICE'\n",
+        encoding="utf-8",
+    )
+    llm = RecordingLLM(_answer())
+
+    discover_plan(repo, "HEAD~1", "HEAD", "exercise changed flow", llm)
+
+    prompt = llm.calls[0]["prompt"]
+    assert "FICTIONAL_NESTED_WORKTREE_SERVICE" not in prompt
+
+
 def test_discovery_prioritizes_current_product_docs_over_workflows_and_archives(tmp_path):
     repo = _repo(tmp_path)
     (repo / "docs/flows.md").unlink()
@@ -208,6 +225,7 @@ def test_discovery_prioritizes_current_product_docs_over_workflows_and_archives(
         "app --api-key literal-secret",
         "app --password=literal-secret",
         "app --auth-token 'literal secret'",
+        "app --secret-key literal-secret",
     ],
 )
 def test_discovery_rejects_literal_secret_arguments(tmp_path, command):
@@ -234,6 +252,87 @@ def test_discovery_accepts_secret_argument_reference(tmp_path):
     answer["startup"]["command"] = 'app --api-key "${API_TOKEN}"'
     plan = discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
     assert plan.startup.command == 'app --api-key "${API_TOKEN}"'
+
+
+def test_discovery_preserves_secret_env_reference_alias(tmp_path):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["command"] = "uv run demo-app"
+    answer["startup"]["env"] = {"OPENAI_API_KEY": "${HOST_OPENAI_KEY}"}
+    answer["startup"]["required_env"] = ["HOST_OPENAI_KEY"]
+
+    plan = discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
+
+    assert plan.startup.env == {"OPENAI_API_KEY": "${HOST_OPENAI_KEY}"}
+    assert plan.startup.required_env == ["HOST_OPENAI_KEY"]
+
+
+def test_discovery_preserves_literal_sqlite_database_url(tmp_path):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["command"] = "uv run demo-app"
+    answer["startup"]["env"] = {"DATABASE_URL": "sqlite:///tmp/qabot.db"}
+    answer["startup"]["required_env"] = []
+
+    plan = discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
+
+    assert plan.startup.env == {"DATABASE_URL": "sqlite:///tmp/qabot.db"}
+    assert plan.startup.required_env == []
+
+
+def test_discovery_preserves_empty_credential_env_override(tmp_path):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["command"] = "uv run demo-app"
+    answer["startup"]["env"] = {"API_KEY": ""}
+    answer["startup"]["required_env"] = []
+
+    plan = discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
+
+    assert plan.startup.env == {"API_KEY": ""}
+    assert plan.startup.required_env == []
+
+
+def test_discovery_preserves_empty_credential_env_with_alias_source(tmp_path):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["command"] = "uv run demo-app"
+    answer["startup"]["env"] = {"TOKEN": "${API_KEY}", "API_KEY": ""}
+    answer["startup"]["required_env"] = ["API_KEY"]
+
+    plan = discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
+
+    assert plan.startup.env == {"TOKEN": "${API_KEY}", "API_KEY": ""}
+    assert plan.startup.required_env == ["API_KEY"]
+
+
+def test_discovery_rewrites_apikey_literal_and_rejects_repeated_value(tmp_path):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["env"] = {"APIKEY": "synthetic-literal-apikey-secret"}
+    answer["startup"]["required_env"] = []
+    answer["sources"] = {"README.md": "uses synthetic-literal-apikey-secret"}
+
+    with pytest.raises(DiscoveryError, match="secret") as exc:
+        discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
+
+    assert "synthetic-literal-apikey-secret" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "health_url",
+    [
+        "http://user:synthetic-health-password@127.0.0.1:8123/",
+        "http://user:synthetic-health-password@[bad",
+    ],
+)
+def test_discovery_rejects_credential_bearing_health_url(tmp_path, health_url):
+    repo = _repo(tmp_path)
+    answer = _answer()
+    answer["startup"]["health_url"] = health_url
+
+    with pytest.raises(DiscoveryError, match="credential"):
+        discover_plan(repo, "HEAD~1", "HEAD", "exercise the flow", RecordingLLM(answer))
 
 
 def test_discovery_bounds_large_repository_prompt_and_marks_excerpts(tmp_path):

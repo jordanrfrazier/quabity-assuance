@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from qabot.journeys.credentials import has_url_credentials, is_credential_name, reference_name
 from qabot.journeys.models import ReviewPlan
 
 DIFF_CHARS = 15_000
@@ -31,6 +32,7 @@ _SKIP_DIRS = {
     ".ruff_cache",
     ".tox",
     ".venv",
+    ".worktrees",
     "build",
     "dist",
     "node_modules",
@@ -67,8 +69,8 @@ _ENV_ASSIGNMENT = re.compile(
     r"(?<![A-Za-z0-9_])([A-Za-z_][A-Za-z0-9_]*)=(?:\"[^\"]*\"|'[^']*'|[^\s;&|]+)"
 )
 _SECRET_NAME = re.compile(
-    r"(?:^|_)(?:ACCESS_KEY|API_KEY|AUTH_TOKEN|CLIENT_SECRET|CONNECTION_STRING|"
-    r"CREDENTIALS?|DATABASE_URL|DSN|PASS(?:WORD|WD)?|PRIVATE_KEY|SECRET|SESSION|TOKEN)(?:_|$)",
+    r"(?:^|_)(?:ACCESS_KEY|APIKEY|API_KEY|AUTH_TOKEN|CLIENT_SECRET|"
+    r"PASS(?:WORD|WD)?|PRIVATE_KEY|SECRET(?:_ACCESS_KEY)?|TOKEN)(?:_|$)",
     re.IGNORECASE,
 )
 
@@ -433,8 +435,25 @@ def _secret_safe(plan: ReviewPlan) -> ReviewPlan:
     literal_secrets: set[str] = set()
 
     def remember_secret(value: str) -> None:
-        if value and not re.fullmatch(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", value):
+        if value and reference_name(value) is None:
             literal_secrets.add(value)
+
+    def require_reference(name: str) -> None:
+        if name not in required:
+            required.append(name)
+
+    def safe_env_value(name: str, value: str) -> str:
+        if not value:
+            return value
+        reference = reference_name(value)
+        if reference:
+            require_reference(reference)
+            return value
+        if is_credential_name(name) or has_url_credentials(value):
+            remember_secret(value)
+            require_reference(name)
+            return f"${{{name}}}"
+        return value
 
     def safe_command(command: str) -> str:
         try:
@@ -449,22 +468,20 @@ def _secret_safe(plan: ReviewPlan) -> ReviewPlan:
                 continue
             if not separator:
                 value = tokens[index + 1] if index + 1 < len(tokens) else ""
-            reference = re.fullmatch(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", value)
+            reference = reference_name(value)
             if not reference:
                 raise DiscoveryError(
                     "model returned a secret command argument; use a ${NAME} environment reference"
                 )
-            if reference[1] not in required:
-                required.append(reference[1])
+            require_reference(reference)
 
         def replace(match: re.Match[str]) -> str:
             name = match.group(1)
-            if not _SECRET_NAME.search(name):
+            value = match.group(0).partition("=")[2].strip("\"'")
+            safe_value = safe_env_value(name, value)
+            if safe_value == value:
                 return match.group(0)
-            remember_secret(match.group(0).partition("=")[2].strip("\"'"))
-            if name not in required:
-                required.append(name)
-            return f"{name}=${{{name}}}"
+            return f"{name}={safe_value}"
 
         return _ENV_ASSIGNMENT.sub(replace, command)
 
@@ -472,23 +489,17 @@ def _secret_safe(plan: ReviewPlan) -> ReviewPlan:
     plan.startup.setup_commands = [safe_command(command) for command in plan.startup.setup_commands]
     if plan.startup.reset_command:
         plan.startup.reset_command = safe_command(plan.startup.reset_command)
+    if has_url_credentials(plan.startup.health_url):
+        raise DiscoveryError("model returned a credential-bearing health URL")
 
     env = dict(plan.startup.env)
     for name in list(env):
-        if name in required or _SECRET_NAME.search(name):
-            remember_secret(env[name])
-            if name not in required:
-                required.append(name)
-            env[name] = f"${{{name}}}"
+        env[name] = safe_env_value(name, env[name])
 
     for journey in plan.journeys:
         settings = dict(journey.preconditions.settings)
         for name in list(settings):
-            if _SECRET_NAME.search(name):
-                remember_secret(settings[name])
-                if name not in required:
-                    required.append(name)
-                settings[name] = f"${{{name}}}"
+            settings[name] = safe_env_value(name, settings[name])
         journey.preconditions.settings = settings
 
     plan.startup.env = env

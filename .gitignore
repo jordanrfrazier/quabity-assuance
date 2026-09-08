@@ -6,6 +6,10 @@ __pycache__/
 
 # Screenshot and run evidence from a QA run.
 qa-artifacts/
+v1/reports/
 
 # Subagent-driven-development scratch (ledger, briefs, review packages).
 .superpowers/
+
+# Project-local linked worktrees.
+.worktrees/

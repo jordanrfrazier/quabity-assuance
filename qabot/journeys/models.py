@@ -49,6 +49,25 @@ class ActionRecord(BaseModel):
     screenshot: str | None = None
 
 
+class StepTiming(BaseModel):
+    """Measured wall time, not provider-internal reasoning time.
+
+    Driver-reported interaction time is action_s (explicit waits use wait_s).
+    Evidence includes capture, prompt preparation and remaining driver overhead.
+    A driver call that raises before returning timing is charged wholly to its
+    action/wait phase because its evidence portion cannot be separated.
+    """
+
+    actor_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    judge_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    action_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    wait_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    evidence_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    total_s: float = Field(default=0, ge=0, allow_inf_nan=False)
+    actor_calls: int = Field(default=0, ge=0, strict=True)
+    judge_calls: int = Field(default=0, ge=0, strict=True)
+
+
 class StepResult(BaseModel):
     index: int
     do: str
@@ -58,6 +77,13 @@ class StepResult(BaseModel):
     actions: list[ActionRecord] = Field(default_factory=list)
     findings: list[Finding] = Field(default_factory=list)
     screenshot: str | None = None
+    timing: StepTiming | None = None
+    started_offset_s: float | None = Field(
+        default=None,
+        ge=0,
+        allow_inf_nan=False,
+        description="Seconds since walk start; approximate video chapter offset",
+    )
 
 
 class JourneyResult(BaseModel):

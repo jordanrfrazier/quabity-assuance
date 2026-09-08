@@ -7,20 +7,24 @@ The earlier CI, demo, and anonymous-scan prototypes remain available below.
 
 ## Reviewed Browser Journeys
 
-Workspace: `/private/tmp/qabot-cli-2026-09-06`, branch `feature/qabot-journeys-cli`.
+Workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`, branch `feature/qabot-journeys-cli`.
+
+Keep linked worktrees under the primary project's `.worktrees/` directory.
+The former direct `/private/tmp/` CLI and combined Langflow worktrees were moved
+there without discarding local changes. Historical evidence retains its original
+paths; existing plans and approvals must be reviewed before reuse after relocation.
 Requires macOS, installed Google Chrome, `uv`, and an authenticated `claude` CLI.
 Journey commands use real Claude/Sonnet calls, not the legacy offline provider.
 
 ```sh
-cd /private/tmp/qabot-cli-2026-09-06
+cd /Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli
 uv sync --extra dev --extra browser
 uv run qabot journeys --help
 
 uv run qabot journeys plan --repo /absolute/application/path --base BASE --head HEAD \
   --description /absolute/change-description.md --out /absolute/new-plan.json
 uv run qabot journeys approve /absolute/new-plan.json --reviewer "Your name"
-uv run qabot journeys run /absolute/new-plan.json --headed --channel chrome \
-  --out /absolute/new-run-directory
+uv run qabot journeys run /absolute/new-plan.json --headed --channel chrome
 ```
 
 Review the proposed command, environment, prerequisites, actions, and expected
@@ -28,17 +32,42 @@ observations before approving. Generated plans are not trusted test results. Put
 credential references such as `${API_KEY}` in the plan, never values. An optional
 `--env-file /absolute/private/.env` on `run` loads only required names; explicit
 plan flags still win. Login actions must name their credential references.
+Run preflight rejects nonempty literal values in recognized credential-named
+environment entries and URLs with embedded credentials, before creating reports.
+Use a complete `${NAME}` reference, not a reference mixed with a literal secret.
+References resolve from the supplied host/dotenv environment before plan overrides;
+their values remain redacted even when a source variable is later cleared.
+Discovery preserves aliases and ordinary configuration, and rejects health URLs
+with embedded credentials instead of producing an unusable URL reference.
+
+The macOS pilot requires `lsof` on `PATH` to verify local listener ownership.
+The target port must be free before setup and startup. Keep the reviewed app in
+the foreground; daemonized or detached listeners cannot establish owned readiness.
+Required setting strings must match exactly, including case and whitespace.
 
 Each new run writes `report.html`, `report.md`, `results.json`, startup logs,
 screenshots, and per-journey WebM video. Open the HTML directly in Chrome.
+Executed setup commands retain redacted stdout/stderr in `setup-01.log`, etc.;
+journey resets use `journey-01-reset.log`, etc. Failure diagnostics name the log.
+Browser cleanup or missing required video can block a journey, but completed
+steps and findings remain in the report with the cleanup diagnostic.
+The default destination is a unique directory beneath the primary Git workspace's
+`v1/reports/`, including when invoked from a linked worktree. Outside Git, the
+invocation directory is used as the root. An explicit `--out` selects another new
+directory. Reports use relative media links and include measured phase timing,
+model call counts, and approximate video chapter links when timing is available.
 Exit codes are `0` for all PASS, `1` for any FAIL, and `2` for BLOCKED without FAIL
 or an invalid command/approval; Ctrl-C retains partial evidence and exits `130`.
-A correctly observed expected rejection can PASS.
-Changed plans or referenced scripts require renewed approval. An unchanged plan
-can be rerun to a fresh output directory without another approval prompt.
+A correctly observed expected rejection can PASS. A failed browser action blocks
+the step before further model judgment; it cannot be retried into a PASS.
+Changed plans, referenced scripts, target repositories, or resolved base/head
+commits require renewed approval. Moving `HEAD` or a branch invalidates approval
+even when the plan text is unchanged. Older approvals without Git bindings must
+be reviewed again. An unchanged approved target and plan can be rerun to a fresh
+output directory without another approval prompt.
 
-Manual walkthrough: [examples/WALKTHROUGH.md](/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md).
-Product requirements: [docs/PRD.md](/private/tmp/qabot-cli-2026-09-06/docs/PRD.md).
+Manual walkthrough: [examples/WALKTHROUGH.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/WALKTHROUGH.md).
+Product requirements: [docs/PRD.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/docs/PRD.md).
 This is a local pilot, not a production-release certification.
 
 Design: `docs/superpowers/specs/2026-08-27-qa-bot-design.md`

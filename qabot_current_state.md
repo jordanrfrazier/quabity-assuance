@@ -1,8 +1,134 @@
 # qabot Current State
 
-Last assessed: 2026-09-07.
+## Local Commit Checkpoint - 2026-09-08
+
+- Jordan explicitly authorized a local commit of the staged V1 timing/reporting
+  work and implemented review fixes on `feature/qabot-journeys-cli`, in
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`.
+  This checkpoint follows parent `13b9c50`; it does not integrate the branch into main.
+- Fresh pre-commit verification: all 179 selected journey tests passed in 162.43s,
+  including Chrome recording/playback and cleanup. Ruff passed for all 16 staged
+  Python files; the staged diff check passed. The staged source snapshot remained
+  unchanged throughout verification.
+- Test evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/commit-20260908/results.xml`.
+  Report artifacts remain local under the primary checkout's `v1/reports/`.
+- R2-04 state-precondition enforcement remains pending Jordan's policy choice.
+  Commit authorization does not authorize model-driven state verification or
+  imply this remaining finding is fixed. No push or Langflow commit is included.
+
+## Round Two Fixes And Worktree Relocation - 2026-09-08
+
+- Jordan authorized fixing all five round-two finding groups using GPT-5.5 and
+  requested project-local worktrees instead of direct /tmp worktrees.
+- Active implementation is now
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`,
+  branch `feature/qabot-journeys-cli`, HEAD `13b9c50` plus preserved uncommitted V1
+  work. Primary checkout remains on `main`, HEAD `a216e98`.
+- Moved the named Langflow worktree, without deleting its four staged changes, to
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/langflow-qabot-combined-20260906`.
+  It remains detached at `2046cd4`. Both old /private/tmp worktree paths are gone.
+  All 133 Quabity and 10,258 Langflow tracked/untracked file hashes and both Git
+  statuses matched after migration. Shared virtualenv symlinks were preserved;
+  Quabity's local editable import path was repaired and CLI help works.
+- `.worktrees/` is ignored in primary and feature checkouts. Create future linked
+  worktrees under the primary project's `.worktrees/`, not directly under /tmp.
+- GPT-5.5 ownership: runtime agent owns runner/tests for stable secret resolution
+  and teardown evidence; discovery agent owns setup/tests and minimal credential
+  helpers; approval agent owns immutable source binding/tests. State-precondition
+  policy clarification is pending (block unverifiable state vs model verification).
+  No state-verification engine is implicitly authorized.
+- Evidence and task ledger:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/round2-fixes-20260908/`.
+  Migration snapshots/patches are in its migration subdirectory. Historical report
+  and approval contents remain unchanged; active docs are being updated for the
+  new CLI path. Older Langflow validation fixtures are not being deleted/mutated.
+- Four finding groups are fixed and independently verified: stable credential
+  references/redaction, immutable approval identity, discovery/runtime credential
+  consistency, and completed findings retained across cleanup failure. Cross-review
+  also fixed same-root target symlink retargeting and empty credential overrides.
+  Discovery skips nested `.worktrees/` evidence. Historical approvals were not renewed.
+- Root final verification: 155 core tests plus 24 discovery tests passed (179 total),
+  including real Chrome video/playback and cleanup checks. Ruff and diff checks passed;
+  all 15 checked source/test hashes remained unchanged during verification.
+  Full results and migration details:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/round2-fixes-20260908/verification.md`.
+- R2-04 remains open: explicit state prerequisites are still ignored. Await Jordan's
+  choice before implementing state handling; recommend fail-closed BLOCKED for
+  unverifiable state in V1. Passing tests do not certify this known defect fixed.
+  Then rerun focused state tests and finish the five-group batch. No project commits,
+  remote writes, live provider runs, or new Langflow execution were performed.
+
+
+## Second Team Review - 2026-09-08
+
+- Jordan requested another GPT-5.5 review team after the five-fix batch. This is
+  review-only: runtime/approval safety, browser verdict integrity, and discovery/
+  CLI/reporting are independent scopes. Root will adjudicate reproducible findings
+  before recommending any further implementation.
+- Target remains `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50` plus the verified uncommitted V1 work.
+  A 72-file source/test/document hash snapshot protects the reviewed baseline.
+- Evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/team-review-20260908-round2/`.
+  No source/test edits, project commits, remote writes, or live provider/Langflow
+  runs are authorized for this review. Only review evidence and state notes change.
+- Review complete. Root prioritized five groups: secret aliases escaping the
+  redaction set; mutable HEAD/branch refs not bound to approved commits; discovery
+  credential rules both missing sensitive fields and rewriting safe configuration;
+  ignored explicit state preconditions; and completed findings lost on context
+  teardown failure. Full adjudication and retained reproductions:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/team-review-20260908-round2/review-summary.md`.
+- Root independently reproduced the full-run alias leak, checked the two-commit
+  approval-drift fixture, and confirmed discovery sanitization/alias behavior.
+  Two independent browser/lifecycle probes passed in 3.68s, intentionally asserting
+  the defects. All 72 source/test/document hashes remained unchanged. No broad
+  suite, live model calls, or fresh Langflow run was performed in this review.
+- Literal command scanning and transitive module hashing remain known limits,
+  not newly promoted findings. Cross-port error attribution needs an explicit
+  policy rather than an automatic change. Missing video can legitimately block;
+  the teardown defect is erased findings, not a blanket requirement for exit 1.
+- Next recommendation: fix credential handling and immutable approval identity,
+  then define supported state-precondition proof/blocking and preserve completed
+  evidence across teardown. No further implementation is authorized yet.
+
+
+## Approved Review Fixes - 2026-09-08
+
+- Jordan authorized the five prioritized fixes and requested GPT-5.5 implementers.
+  Three agents own disjoint walker, runner, and listener-ownership files. Scope:
+  literal credential preflight, failed-action blocking, owned startup readiness,
+  exact setting comparisons, and retained redacted setup/reset diagnostics.
+- Active implementation remains `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50` plus existing uncommitted V1 work.
+  The primary checkout is on `main`, HEAD `a216e98`; no source integration there.
+- Plan:
+  `/private/tmp/qabot-cli-2026-09-06/docs/superpowers/plans/2026-09-08-v1-review-fixes.md`.
+  Tests and review evidence stay under
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/v1-review-fixes-20260908/`.
+- All five fixes are implemented. Root's combined runner/walker/ownership suite
+  passed 113 tests in 147.44s, including real Chrome video playback and process
+  cleanup. Six source/test hashes stayed unchanged throughout verification; Ruff
+  and git diff --check passed. An independent GPT-5.5 final review found no
+  blockers in the approved scope. An additional 171-case redaction boundary sweep
+  and two full-run foreign-listener acceptance probes passed.
+- Literal credential-bearing URLs, malformed credential authorities, no-reset
+  per-journey ownership checks, and setup/reset capture-failure handling were
+  corrected during review. Common configuration knobs and file paths remain
+  allowed. README, PRD implementation notes, and walkthrough describe the checks.
+- Verification summary:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/v1-review-fixes-20260908/verification.md`.
+- Residual follow-up: startup-log capture errors still need explicit report
+  handling; setup/reset capture errors are handled. General secret scanning and
+  pixel redaction are not implemented. Other review findings and V2 learning/replay
+  remain deferred. No fresh Langflow/provider runs or project commits/remote writes.
+- Next: Jordan completes the first-use manual walkthrough, then validate a paired
+  known-broken/known-fixed application with unchanged assertions. Integration of
+  this feature worktree into main awaits explicit commit/integration authorization.
+
+Last assessed: 2026-09-08.
 Directory: `/private/tmp/qabot-cli-2026-09-06`.
-Branch: `feature/qabot-journeys-cli`. Pre-merge HEAD: `a4df6a6` (review fixes committed).
+Branch: `feature/qabot-journeys-cli`. Current HEAD: `13b9c50` plus uncommitted V1 changes.
 Incoming main revision: `ce0cede56e80f524d677ddf1b7de89eca4464f88`.
 Original workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
 Initial code/test assessment was performed at `ccc3698` with the existing working tree.
@@ -349,3 +475,98 @@ publishing, messages to others, or ticket changes were performed.
   tests and live model/browser scenarios were not rerun for this docs-only merge.
 - Next: complete the authorized local merge commit, then continue Jordan's manual
   walkthrough and PRD decisions D-05 through D-08. No push or publication is authorized.
+
+## Performance Discussion - 2026-09-07 (Proposed, Not Approved)
+
+- Jordan found the PR14931 failure's video/photo evidence useful, but questioned
+  the roughly 1:45 video for four steps. Suggested learning reusable setup workflows
+  such as login, possibly with a background agent, and asked about v1 versus v2.
+- Inspection of the retained diagnostic results found eight browser actions. The
+  current loop implies twelve actor decisions (including four done decisions) and
+  four judge calls, each using a separate Claude CLI invocation. Generic network
+  idle/text-stability waits also follow each action, including form fills. There
+  are no per-action/model-call timings to attribute the actual elapsed time.
+- Recommendation for discussion: v1 timing breakdown and condition-specific waits
+  while preserving delayed-error capture; a bounded follow-up for explicit,
+  reviewed setup recipes replayed without per-action model calls; v2 automatic
+  cross-journey pattern discovery and recipe maintenance. No implementation or
+  release-scope change was authorized in this discussion.
+- Reuse procedures, not verdicts: validate role/profile and page preconditions,
+  parameterize secret references, require fresh postconditions/evidence, and stop
+  visibly on divergence rather than silently repairing or repeating side effects.
+  Authentication-state reuse is distinct from replaying login and cannot stand in
+  for testing login itself. Candidate recipes may come from verified setup steps
+  even when the later application assertion correctly fails.
+
+## V1 Performance Validation - 2026-09-07 (In Progress)
+
+- Jordan approved v1 timing, bounded readiness improvements, and durable report
+  storage, with workflow replay, authentication reuse, and automatic learning
+  deferred. This supersedes the proposed/not-approved status above.
+- Application changes remain in `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`. Deferred design is in
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v2/`, in the
+  primary checkout on branch `main`, as explicitly requested. No commit or push.
+- New run output defaults to the primary Git workspace's `v1/reports/` directory,
+  even when invoked from the linked implementation worktree. Reports contain
+  optional measured phase timings, model call counts, approximate video chapters,
+  and bundle-relative media links. No synthetic timings are added to old runs.
+- Retained evidence is at
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/`.
+  All 1,306 original copied files were hash-verified. The 26 historical report
+  bundles now have portable regenerated views and `.original` JSON/HTML/Markdown
+  backups; video and screenshot bytes are unchanged. The migration manifest
+  describes original copy hashes, not hashes of regenerated report views.
+- Fresh focused verification: 70 CLI/report/runner/walker tests passed in 104.93s,
+  including Chrome playback and chapter seeking. Ruff passed for the eight edited
+  application/test Python files. GPT-5.5 reviewed both timing/readiness and
+  report/CLI scopes with no findings; its separate checks passed 51 walker tests
+  and 14 non-browser CLI/report/runner tests.
+- Jordan requested a fresh diagnostic run followed by first-use walkthrough
+  instructions. GPT-5.5's initial launch correctly stopped with exit 2: the old
+  approval had no launcher hash and is stale under the extensionless-script fix.
+  No browser verdict or timing was produced by that attempt. Root inspected the
+  standard launcher wrapper and unchanged plan. Next is an explicitly labeled
+  agent re-review of an unchanged durable plan copy, preserving the old approval.
+- The walkthrough now starts with fresh discovery, records review corrections,
+  checks editor and Assistant coverage, and uses durable report destinations.
+  Prepared Langflow prerequisites remain a disclosed limitation of this first-use
+  evaluation; a clean-machine install has not been validated.
+
+## Fresh Diagnostic Evidence - 2026-09-07
+
+- Fresh report:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/20260907T160319Z-diagnostic-plan-dcd7ab11/report.html`.
+  The unchanged four-step diagnostic on exact Langflow revision
+  `d14dec904fc55c5e79cfeb8dec2bdf449e638f9d` reports three held steps and one
+  failed expectation; the CLI exited 1. Root independently inspected its final screenshot: only
+  the generic missing-model error is visible, not the required policy explanation.
+  The final action trace contains one Run component click and one notification
+  inspection, not a retry or fixture repair.
+- The plan was copied byte-for-byte to durable storage and explicitly re-reviewed
+  as an agent review, not human confirmation. The old approval is preserved. The
+  default run destination correctly resolved the primary checkout from the linked
+  worktree; original example plan and approval were not modified.
+- Measured step total: 81.414s. Actor calls: 44.521s across 12 calls. Judge calls:
+  24.612s across 4 calls. Browser actions: 1.224s. Readiness/explicit waits: 8.653s.
+  Evidence/driver overhead: 2.396s. Full recorded run timestamps span 113.602s,
+  including startup and teardown outside measured steps. Model calls account for
+  approximately 85% of measured step time, not provider-internal reasoning time.
+- Root independently decoded the 1440x1000, 87.32s video in Chrome, checked four
+  chapter links and final chapter seeking to approximately 60.70s, verified 13
+  bundle-relative media references, and inspected desktop/mobile screenshots.
+  Report layout fits 390px mobile width. Review screenshots are retained in the
+  run's `independent-review/` directory. GPT-5.5 also confirmed nonblank decoded
+  frames at five positions spanning the recording and retained `validation.md`.
+  A single shorter recording than the old
+  104.48s video does not establish a repeatable performance improvement.
+- Port 7862 is free after execution. The target still has only its known modified
+  `uv.lock`; no target application source was changed. All 1,306 historical
+  original files were rechecked against the migration manifest after portable-view
+  regeneration, resolving original view hashes against `.original` backups.
+- Next: Jordan follows First-Use Validation and section 6 of
+  `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`, recording discovery
+  corrections, missing setup information, editor/Assistant coverage, independent
+  evidence judgments, and unchanged-plan rerun behavior. Do not treat the prepared
+  runtime walkthrough as proof of clean-machine installation or generic state
+  attestation. No commits, pushes, or remote publication were performed.

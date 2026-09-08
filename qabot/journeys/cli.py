@@ -1,13 +1,33 @@
 """Plan, review, approve, and execute local browser journeys."""
 
+import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from qabot.journeys.approval import ApprovalError, approve_plan
 from qabot.journeys.llm import journey_provider
 from qabot.journeys.runner import run_plan
 from qabot.journeys.setup import DiscoveryError, discover_plan
 from qabot.llm import LLMError
+
+
+def default_run_directory(plan: Path) -> Path:
+    root = Path.cwd()
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=root, capture_output=True, text=True, check=False, timeout=10,
+        )
+        if result.returncode == 0:
+            common = Path(result.stdout.strip())
+            if common.name == ".git":
+                root = common.parent
+    except FileNotFoundError:
+        pass  # Outside a Git-capable environment, retain evidence in the invocation directory.
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    return root / "v1" / "reports" / f"{stamp}-{plan.stem}-{uuid4().hex[:8]}"
 
 
 def command(args):
@@ -31,17 +51,18 @@ def command(args):
         if args.journey_command == "approve":
             print(f"Approval: {approve_plan(Path(args.plan), args.reviewer)}")
             return 0
+        out = Path(args.out).resolve() if args.out else default_run_directory(Path(args.plan))
         result = run_plan(
             Path(args.plan),
-            Path(args.out),
+            out,
             headed=args.headed,
             channel=args.channel,
             selected=args.journey,
             env_file=Path(args.env_file) if args.env_file else None,
         )
-        print(f"Report: {Path(args.out).resolve() / 'report.html'}")
+        print(f"Report: {out / 'report.html'}")
         return result
-    except (ApprovalError, DiscoveryError, LLMError, OSError, ValueError) as exc:
+    except (ApprovalError, DiscoveryError, LLMError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
         print(f"qabot journeys: {exc}", file=sys.stderr)
         return 2
 
@@ -62,7 +83,9 @@ def add_parser(sub):
     approve.add_argument("--reviewer", required=True)
     run = commands.add_parser("run", help="start the approved application and record journeys")
     run.add_argument("plan")
-    run.add_argument("--out", required=True, help="new, non-existing run directory")
+    run.add_argument(
+        "--out", help="new run directory; default: primary Git workspace v1/reports/<unique-run>"
+    )
     run.add_argument("--headed", action="store_true")
     run.add_argument(
         "--env-file", help="local dotenv file; loads only the plan's required credential names"

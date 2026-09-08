@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import codecs
+import json
 import os
 import re
 import signal
@@ -10,15 +12,17 @@ import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, quote_plus, urlsplit
 
 import httpx
 
 from qabot.drivers.base import Action
 from qabot.drivers.browser import BrowserDriver
 from qabot.journeys.approval import require_approval
+from qabot.journeys.credentials import has_url_credentials, is_credential_name, reference_name
 from qabot.journeys.llm import journey_provider
 from qabot.journeys.models import JourneyResult, ReviewPlan, StepOutcome, StepResult
+from qabot.journeys.ownership import ensure_endpoint_available, require_owned_endpoint
 from qabot.journeys.report import write_report
 from qabot.journeys.walker import WalkCancelled, redact_data, redact_text, walk
 from qabot.models import Outcome
@@ -31,7 +35,7 @@ _MOVEMENT_KEYS = _ARROW_KEYS | {f"Shift+{key}" for key in _ARROW_KEYS}
 
 
 def resolve_environment(startup, *, env_file: Path | None = None):
-    env = dict(os.environ)
+    source_env = dict(os.environ)
     required = set(startup.required_env)
     for value in startup.env.values():
         required.update(_REFERENCE.findall(value))
@@ -43,12 +47,14 @@ def resolve_environment(startup, *, env_file: Path | None = None):
         values = dotenv_values(env_file, interpolate=False)
         for name in required:
             if values.get(name):
-                env[name] = values[name]
-    missing = sorted(name for name in required if not env.get(name))
+                source_env[name] = values[name]
+    missing = sorted(name for name in required if not source_env.get(name))
     if missing:
         raise ValueError("Missing required environment variables: " + ", ".join(missing))
+    env = dict(source_env)
     for key, value in startup.env.items():
-        env[key] = _REFERENCE.sub(lambda match: env[match[1]], value)
+        env[key] = _REFERENCE.sub(lambda match: source_env[match[1]], value)
+    secret_values = [source_env[name] for name in sorted(required) if source_env.get(name)]
     return env, {
         "required": sorted(required),
         "supplied": dict(startup.env),
@@ -58,7 +64,17 @@ def resolve_environment(startup, *, env_file: Path | None = None):
             "Supplied environment is not proof of effective runtime configuration.",
             "The child process inherits the operator environment; values are not exported.",
         ],
-    }
+    }, secret_values
+
+
+def _validate_startup_env_literals(startup) -> None:
+    for key, value in startup.env.items():
+        if value and reference_name(value) is None and (
+            is_credential_name(key) or has_url_credentials(value)
+        ):
+            raise ValueError(
+                f"startup.env.{key} must use an environment reference such as ${{{key}}}"
+            )
 
 
 class JourneyBrowserDriver(BrowserDriver):
@@ -229,22 +245,130 @@ def _stop(process):
     process.wait(timeout=5)
 
 
-def _run_command(command, *, cwd, env):
+def _secret_variants(secrets):
+    return {
+        variant
+        for secret in secrets
+        if secret
+        for variant in (
+            str(secret),
+            json.dumps(str(secret))[1:-1],
+            json.dumps(str(secret), ensure_ascii=False)[1:-1],
+            quote(str(secret), safe=""),
+            quote_plus(str(secret)),
+        )
+    }
+
+
+def _redaction_overlap_size(secrets):
+    longest = max((len(variant) for variant in _secret_variants(secrets)), default=0)
+    return max(0, longest - 1)
+
+
+def _next_secret_variant_match(text, variants, limit):
+    best: tuple[int, str] | None = None
+    for variant in variants:
+        index = text.find(variant)
+        if index == -1:
+            continue
+        if index >= limit:
+            continue
+        if best is None or index < best[0] or (index == best[0] and len(variant) > len(best[1])):
+            best = (index, variant)
+    return best
+
+
+def _capture_process_output(process, log_path, *, redact, secrets):
+    variants = sorted(_secret_variants(secrets), key=len, reverse=True)
+    overlap_size = _redaction_overlap_size(secrets)
+    pending = ""
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+    with Path(log_path).open("w", encoding="utf-8") as log:
+        while True:
+            chunk = process.stdout.read(8192)
+            if not chunk:
+                break
+            pending += decoder.decode(chunk)
+            if overlap_size == 0:
+                log.write(redact(pending))
+                pending = ""
+            else:
+                while len(pending) > overlap_size + 8192:
+                    safe_limit = len(pending) - overlap_size
+                    match = _next_secret_variant_match(pending, variants, safe_limit)
+                    if match is None:
+                        safe = pending[:safe_limit]
+                        pending = pending[safe_limit:]
+                        log.write(redact(safe))
+                        continue
+                    index, variant = match
+                    if index:
+                        log.write(redact(pending[:index]))
+                    log.write("[REDACTED]")
+                    pending = pending[index + len(variant) :]
+            log.flush()
+        pending += decoder.decode(b"", final=True)
+        if pending:
+            log.write(redact(pending))
+            log.flush()
+
+
+def _start_log_thread(process, log_path, *, redact, secrets):
+    capture_errors = []
+
+    def capture():
+        try:
+            _capture_process_output(process, log_path, redact=redact, secrets=secrets)
+        except Exception as exc:  # noqa: BLE001 -- surface lost diagnostics to the runner.
+            capture_errors.append(exc)
+
+    thread = threading.Thread(
+        target=capture,
+        daemon=True,
+    )
+    thread.capture_errors = capture_errors
+    thread.start()
+    return thread
+
+
+def _run_command(command, *, cwd, env, log_path, log_ref, redact, secrets, label):
     process = subprocess.Popen(
         command,
         shell=True,
         cwd=cwd,
         env=env,
         start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
     )
+    log_thread = _start_log_thread(process, log_path, redact=redact, secrets=secrets)
+    primary_error = None
     try:
-        returncode = process.wait(timeout=STARTUP_TIMEOUT)
-        if returncode:
-            raise subprocess.CalledProcessError(returncode, command)
+        try:
+            returncode = process.wait(timeout=STARTUP_TIMEOUT)
+        except subprocess.TimeoutExpired as exc:
+            primary_error = RuntimeError(f"{label} timed out; inspect {log_ref}")
+            primary_error.__cause__ = exc
+        except BaseException as exc:  # noqa: BLE001 -- cleanup before preserving cancellation.
+            primary_error = exc
+        else:
+            if returncode:
+                primary_error = RuntimeError(
+                    f"{label} exited with status {returncode}; inspect {log_ref}"
+                )
+        if primary_error is not None:
+            raise primary_error
     finally:
         _stop(process)
+        log_thread.join(timeout=5)
+        if not isinstance(primary_error, KeyboardInterrupt):
+            capture_errors = getattr(log_thread, "capture_errors", [])
+            if capture_errors:
+                raise RuntimeError(
+                    f"{label} output capture failed for {log_ref}"
+                ) from capture_errors[0]
+            if log_thread.is_alive():
+                raise RuntimeError(f"{label} output capture did not finish for {log_ref}")
 
 
 def _blocked(journey, reason):
@@ -257,6 +381,15 @@ def _blocked(journey, reason):
             for i, s in enumerate(journey.steps)
         ],
     )
+
+
+def _block_result(result, reason):
+    if result.outcome == Outcome.BLOCKED:
+        result.why = f"{result.why}; {reason}" if result.why else reason
+        return
+    prior = result.why or f"completed with {result.outcome.value}"
+    result.outcome = Outcome.BLOCKED
+    result.why = f"{reason}; completed result was {prior}"
 
 
 def run_plan(
@@ -276,6 +409,7 @@ def run_plan(
         raise ValueError(
             "Selection must name existing journey IDs and contain at least one journey"
         )
+    _validate_startup_env_literals(plan.startup)
     out = Path(out).resolve()
     out.mkdir(parents=True, exist_ok=False)
     metadata = {
@@ -307,8 +441,11 @@ def run_plan(
     try:
         if plan.unresolved:
             raise ValueError("Unresolved plan requirements: " + "; ".join(plan.unresolved))
-        env, metadata["configuration"] = resolve_environment(plan.startup, env_file=env_file)
-        secrets = [env[name] for name in metadata["configuration"]["required"] if env.get(name)]
+        env, metadata["configuration"], secrets = resolve_environment(
+            plan.startup, env_file=env_file
+        )
+        redact = lambda text: redact_text(text, secrets)
+        metadata["configuration"]["logs"] = {"startup": "startup.log"}
         repo = Path(plan.repo)
         if not repo.is_absolute():
             repo = Path(plan_path).resolve().parent / repo
@@ -342,19 +479,22 @@ def run_plan(
             "::1",
         }:
             raise ValueError("Startup health URL must address the local application")
-        if _healthy(plan.startup.health_url):
-            raise ValueError(
-                "Health endpoint is already serving; refusing to test an unowned application"
+        ensure_endpoint_available(plan.startup.health_url)
+
+        for index, command in enumerate(plan.startup.setup_commands, start=1):
+            log_ref = f"setup-{index:02d}.log"
+            metadata["configuration"]["logs"][f"setup-{index:02d}"] = log_ref
+            _run_command(
+                command,
+                cwd=cwd,
+                env=env,
+                log_path=out / log_ref,
+                log_ref=log_ref,
+                redact=redact,
+                secrets=secrets,
+                label=f"setup command {index}",
             )
-
-        def capture():
-            with (out / "startup.log").open("w") as log:
-                for line in process.stdout:
-                    log.write(redact_text(line, secrets))
-                    log.flush()
-
-        for command in plan.startup.setup_commands:
-            _run_command(command, cwd=cwd, env=env)
+        ensure_endpoint_available(plan.startup.health_url)
         print(f"Starting application in {cwd}", flush=True)
         process = subprocess.Popen(
             plan.startup.command,
@@ -364,10 +504,13 @@ def run_plan(
             start_new_session=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
         )
-        log_thread = threading.Thread(target=capture, daemon=True)
-        log_thread.start()
+        log_thread = _start_log_thread(
+            process,
+            out / "startup.log",
+            redact=redact,
+            secrets=secrets,
+        )
         deadline = time.monotonic() + STARTUP_TIMEOUT
         while not _healthy(plan.startup.health_url):
             if process.poll() is not None:
@@ -375,6 +518,7 @@ def run_plan(
             if time.monotonic() >= deadline:
                 raise RuntimeError("Application readiness timed out; inspect startup.log")
             time.sleep(0.5)
+        require_owned_endpoint(plan.startup.health_url, process)
         metadata["configuration"]["observed"]["health_url"] = plan.startup.health_url
         llm = llm or journey_provider()
         from playwright.sync_api import sync_playwright
@@ -387,19 +531,32 @@ def run_plan(
                     artifacts = out / f"journey-{index + 1:02d}"
                     artifacts.mkdir()
                     if plan.startup.reset_command:
-                        _run_command(plan.startup.reset_command, cwd=cwd, env=env)
+                        log_ref = f"journey-{index + 1:02d}-reset.log"
+                        metadata["configuration"]["logs"][f"{journey.id}-reset"] = log_ref
+                        _run_command(
+                            plan.startup.reset_command,
+                            cwd=cwd,
+                            env=env,
+                            log_path=out / log_ref,
+                            log_ref=log_ref,
+                            redact=redact,
+                            secrets=secrets,
+                            label=f"reset command for {journey.id}",
+                        )
                     else:
                         metadata["limitations"].append(
                             f"{journey.id}: fresh browser context; persistent application state is not reset."
                         )
+                    require_owned_endpoint(plan.startup.health_url, process)
                     context = browser.new_context(
                         viewport={"width": 1440, "height": 1000},
                         record_video_dir=str(artifacts),
                         record_video_size={"width": 1440, "height": 1000},
                     )
                     result = None
-                    page = context.new_page()
+                    page = None
                     try:
+                        page = context.new_page()
                         driver = JourneyBrowserDriver(
                             f"{origin.scheme}://{origin.netloc}",
                             page,
@@ -421,17 +578,29 @@ def run_plan(
                             journey,
                             f"Browser execution could not complete: {type(exc).__name__}: {exc}",
                         )
-                    finally:
-                        context.close()
+                    results.append(result)
+                    context_closed = False
                     try:
+                        context.close()
+                        context_closed = True
+                    except KeyboardInterrupt:
+                        _block_result(result, "Browser context cleanup was cancelled")
+                        cancelled = True
+                    except Exception as exc:  # noqa: BLE001 -- preserve completed result evidence.
+                        _block_result(
+                            result, f"Browser context cleanup failed: {type(exc).__name__}: {exc}"
+                        )
+                    try:
+                        if not context_closed:
+                            raise RuntimeError("browser context cleanup did not complete")
+                        if page is None:
+                            raise RuntimeError("Page was not created")
                         video = Path(page.video.path())
                         if not video.is_file() or video.stat().st_size == 0:
                             raise RuntimeError("Recording missing or empty")
                         result.video = str(video)
                     except Exception as exc:  # noqa: BLE001 -- missing video must block the result.
-                        result.outcome = Outcome.BLOCKED
-                        result.why = f"Required video unavailable: {exc}"
-                    results.append(result)
+                        _block_result(result, f"Required video unavailable: {exc}")
                     persist()
                     print(
                         f"  {result.outcome.value.upper()}: {result.why or 'All expected observations held'}",
@@ -444,7 +613,15 @@ def run_plan(
                         )
                         break
             finally:
-                browser.close()
+                try:
+                    browser.close()
+                except KeyboardInterrupt:
+                    cancelled = True
+                    metadata["limitations"].append("Browser cleanup was cancelled.")
+                except Exception as exc:  # noqa: BLE001 -- cleanup failure belongs in the report.
+                    metadata["limitations"].append(
+                        f"Browser cleanup failed: {type(exc).__name__}: {exc}"
+                    )
     except KeyboardInterrupt:
         cancelled = True
         results.extend(

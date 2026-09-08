@@ -1,10 +1,11 @@
+import time
 from pathlib import Path
 
 import pytest
 
 from qabot.drivers.base import Action
 from qabot.drivers.browser import BrowserDriver
-from qabot.journeys.models import Journey, JourneyStep
+from qabot.journeys.models import Journey, JourneyStep, StepOutcome
 from qabot.journeys.runner import JourneyBrowserDriver
 from qabot.journeys.walker import unmet_preconditions, walk
 from qabot.llm import LLMError
@@ -53,7 +54,7 @@ def test_decision_prompt_treats_quoted_input_as_literal_data(page):
         do=f'Fill the Message textbox with the entire literal string "{literal}".',
         see=f'The submitted user message is exactly "{literal}".',
     )
-    page.set_content('<label>Message<input></label>')
+    page.set_content("<label>Message<input></label>")
 
     class CheckPrompt:
         def complete_json(self, system, prompt, schema_hint):
@@ -129,6 +130,22 @@ def test_secret_preconditions_resolve_without_leaking_mismatch():
     assert errors
     assert "actual-secret" not in str(errors)
     assert "different" not in str(errors)
+
+
+def test_preconditions_compare_supplied_setting_strings_exactly():
+    j = journey()
+    j.preconditions.settings = {"MODE": "Strict", "LABEL": "Custom ${SUFFIX}"}
+    assert unmet_preconditions(j, {"MODE": "Strict", "LABEL": "Custom Components", "SUFFIX": "Components"}) == []
+
+    assert unmet_preconditions(
+        j, {"MODE": "strict", "LABEL": "Custom Components", "SUFFIX": "Components"}
+    ) == ["MODE does not match its reviewed precondition"]
+    assert unmet_preconditions(
+        j, {"MODE": "Strict ", "LABEL": "Custom Components", "SUFFIX": "Components"}
+    ) == ["MODE does not match its reviewed precondition"]
+    assert unmet_preconditions(
+        j, {"MODE": "Strict", "LABEL": "custom Components", "SUFFIX": "Components"}
+    ) == ["LABEL does not match its reviewed precondition"]
 
 
 @pytest.mark.browser
@@ -395,6 +412,63 @@ def test_wait_observes_delayed_enabled_control_and_retains_screenshot(page, tmp_
 
 
 @pytest.mark.browser
+def test_failed_required_click_blocks_before_actor_can_mark_done(page, tmp_path):
+    page.route(
+        "http://localhost/**",
+        lambda route: route.fulfill(content_type="text/html", body="<p>Ready</p>"),
+    )
+    page.goto("http://localhost/")
+    driver = JourneyBrowserDriver("http://localhost", page, tmp_path, timeout_ms=100)
+    llm = Decisions(
+        {"op": "click", "role": "button", "name": "Build"},
+        {"op": "done"},
+        {"verdict": "held", "reason": "Ready"},
+    )
+
+    result = walk(journey(), driver, page, llm, tmp_path)
+
+    step = result.steps[0]
+    assert result.outcome == Outcome.BLOCKED
+    assert step.outcome == StepOutcome.BLOCKED
+    assert step.timing.actor_calls == 1
+    assert step.timing.judge_calls == 0
+    assert len(step.actions) == 1
+    assert not step.actions[0].ok
+    assert step.actions[0].error
+    assert Path(step.actions[0].screenshot).is_file()
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    "action",
+    [
+        {"op": "wait", "role": "button", "name": "Build", "state": "enabled", "timeout_ms": 100},
+        {"op": "press", "role": "button", "name": "Build", "key": "Enter"},
+    ],
+)
+def test_failed_wait_or_press_blocks_before_judgment(page, tmp_path, action):
+    page.route(
+        "http://localhost/**",
+        lambda route: route.fulfill(content_type="text/html", body="<p>Ready</p>"),
+    )
+    page.goto("http://localhost/")
+    driver = JourneyBrowserDriver("http://localhost", page, tmp_path, timeout_ms=100)
+    llm = Decisions(action, {"op": "done"}, {"verdict": "held", "reason": "Ready"})
+
+    result = walk(journey(), driver, page, llm, tmp_path)
+
+    step = result.steps[0]
+    assert result.outcome == Outcome.BLOCKED
+    assert step.outcome == StepOutcome.BLOCKED
+    assert step.timing.actor_calls == 1
+    assert step.timing.judge_calls == 0
+    assert len(step.actions) == 1
+    assert not step.actions[0].ok
+    assert step.actions[0].error
+    assert Path(step.actions[0].screenshot).is_file()
+
+
+@pytest.mark.browser
 @pytest.mark.parametrize("timeout", [0, 60001, "1000", True])
 def test_wait_rejects_invalid_timeout_before_browser_action(page, tmp_path, timeout):
     driver = JourneyBrowserDriver("http://localhost", page, tmp_path)
@@ -521,3 +595,243 @@ def test_expected_server_error_requires_explicit_judge_confirmation(
     result = walk(journey(expected_error=True), driver, page, llm, tmp_path)
     assert result.outcome == expected
     assert any(f.oracle == "browser_server_error" for f in result.steps[0].findings)
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize(
+    "ending", ["held", "failed", "model_error", "cancel_actor", "cancel_judge"]
+)
+def test_step_timing_survives_verdict_model_failure_and_cancellation(page, tmp_path, ending):
+    from qabot.journeys.walker import WalkCancelled
+
+    page.set_content("<p>Current state</p>")
+
+    class TimedDecisions(Decisions):
+        def complete_json(self, *args):
+            time.sleep(0.02)
+            item = next(self.items)
+            if isinstance(item, BaseException):
+                raise item
+            return item
+
+    actor_end = {"op": "done"}
+    judge_end = {"verdict": ending, "reason": "Measured result"}
+    if ending == "model_error":
+        actor_end = LLMError("offline model failure")
+    elif ending == "cancel_actor":
+        actor_end = KeyboardInterrupt()
+    elif ending == "cancel_judge":
+        judge_end = KeyboardInterrupt()
+    llm = TimedDecisions({"op": "read"}, actor_end, judge_end)
+    driver = BrowserDriver("http://localhost", page, tmp_path)
+    if ending.startswith("cancel"):
+        with pytest.raises(WalkCancelled) as exc:
+            walk(journey(), driver, page, llm, tmp_path)
+        result = exc.value.result
+    else:
+        result = walk(journey(), driver, page, llm, tmp_path)
+    step = result.steps[0]
+    timing = step.timing
+    assert timing is not None
+    assert timing.actor_calls == 2
+    assert timing.actor_s >= 0.04
+    judged = ending in {"held", "failed", "cancel_judge"}
+    assert timing.judge_calls == int(judged)
+    assert timing.judge_s >= (0.02 if judged else 0)
+    assert timing.evidence_s > 0
+    assert timing.total_s >= sum(
+        getattr(timing, field)
+        for field in ("actor_s", "judge_s", "action_s", "wait_s", "evidence_s")
+    )
+    assert 0 <= step.started_offset_s < timing.total_s
+
+
+def test_historical_and_unreached_steps_have_unknown_timing(tmp_path):
+    from qabot.journeys.models import StepResult
+
+    historical = StepResult(index=0, do="Read", see="Ready", outcome="held")
+    assert historical.timing is None
+    assert historical.started_offset_s is None
+    item = journey()
+    item.preconditions.settings = {"REQUIRED": "yes"}
+    unreached = walk(item, object(), None, None, tmp_path).steps[0]
+    assert unreached.timing is None
+    assert unreached.started_offset_s is None
+
+
+@pytest.mark.browser
+def test_form_edits_skip_settling_and_network_idle(page, tmp_path, monkeypatch):
+    from qabot.journeys import walker
+
+    page.set_content(
+        "<label>Name<input></label><label>Role<select><option>Reader</option></select></label>"
+    )
+    settlements = []
+    original = walker._settle
+
+    def track_settle(*args, **kwargs):
+        settlements.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(walker, "_settle", track_settle)
+    llm = Decisions(
+        {"op": "fill", "role": "textbox", "name": "Name", "value": "Jordan"},
+        {"op": "select", "role": "combobox", "name": "Role", "value": "Reader"},
+        {"op": "read"},
+        {"op": "blocked", "reason": "Stop after local edits"},
+    )
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, llm, tmp_path)
+    assert page.get_by_role("textbox", name="Name").input_value() == "Jordan"
+    assert len(result.steps[0].actions) == 3
+    assert settlements == []
+
+
+@pytest.mark.browser
+def test_navigation_waits_for_loading_without_network_idle(page, tmp_path, monkeypatch):
+    page.route(
+        "http://localhost/**",
+        lambda route: route.fulfill(
+            content_type="text/html",
+            body=(
+                "<p>Loading...</p><script>setTimeout(() => "
+                'document.querySelector("p").textContent="Ready", 700)</script>'
+            ),
+        ),
+    )
+    states = []
+    original = page.wait_for_load_state
+
+    def track_state(state, **kwargs):
+        states.append(state)
+        return original(state, **kwargs)
+
+    monkeypatch.setattr(page, "wait_for_load_state", track_state)
+
+    class ReadyDecisions(Decisions):
+        def complete_json(self, *args):
+            item = super().complete_json(*args)
+            if item.get("op") == "done":
+                assert page.inner_text("body") == "Ready"
+            return item
+
+    llm = ReadyDecisions({"op": "goto", "path": "/"}, {"op": "done"}, {"verdict": "held"})
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, llm, tmp_path)
+    assert result.outcome == Outcome.PASS
+    assert "networkidle" not in states
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("expected_error", [False, True])
+def test_runtime_errors_arriving_during_judgment_are_retained(page, tmp_path, expected_error):
+    page.set_content("<p>Custom components are disabled</p>")
+
+    class DelayedJudge(Decisions):
+        def complete_json(self, *args):
+            item = super().complete_json(*args)
+            if "verdict" in item:
+                page.evaluate("() => setTimeout(() => {throw new Error('judge-time crash')}, 20)")
+                time.sleep(0.1)
+            return item
+
+    llm = DelayedJudge({"op": "done"}, {"verdict": "held", "recorded_errors": "expected"})
+    result = walk(
+        journey(expected_error=expected_error),
+        BrowserDriver("http://localhost", page),
+        page,
+        llm,
+        tmp_path,
+    )
+    assert result.outcome == Outcome.FAIL
+    assert any(
+        f.oracle == "browser_page_error" and "judge-time crash" in f.detail
+        for f in result.steps[0].findings
+    )
+
+
+@pytest.mark.browser
+def test_delayed_fill_error_is_observed_before_judgment(page, tmp_path):
+    page.set_content(
+        "<label>Name<input oninput=\"setTimeout(() => {throw new Error('fill crash')}, 300)\"></label>"
+    )
+    prompts = []
+
+    class CapturingDecisions(Decisions):
+        def complete_json(self, *args):
+            prompts.append(args[1])
+            return super().complete_json(*args)
+
+    llm = CapturingDecisions(
+        {"op": "fill", "role": "textbox", "name": "Name", "value": "Jordan"},
+        {"op": "done"},
+        {"verdict": "held"},
+    )
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, llm, tmp_path)
+    assert result.outcome == Outcome.FAIL
+    assert "fill crash" in prompts[-1]
+    assert result.steps[0].timing.action_s > 0
+
+
+@pytest.mark.browser
+def test_new_server_failure_is_not_covered_by_earlier_expected_error_judgment(page, tmp_path):
+    page.route("http://localhost/**", lambda route: route.fulfill(status=500, body="Failed"))
+    page.set_content("<p>Custom components are disabled</p>")
+
+    class DelayedJudge(Decisions):
+        def complete_json(self, *args):
+            item = super().complete_json(*args)
+            if "verdict" in item:
+                page.evaluate("() => {fetch('http://localhost/new-failure').catch(() => {})}")
+                page.wait_for_timeout(50)
+            return item
+
+    llm = DelayedJudge({"op": "done"}, {"verdict": "held", "recorded_errors": "expected"})
+    result = walk(
+        journey(expected_error=True), BrowserDriver("http://localhost", page), page, llm, tmp_path
+    )
+    assert result.outcome == Outcome.BLOCKED
+    assert any(f.oracle == "browser_server_error" for f in result.steps[0].findings)
+    assert "not judged" in result.steps[0].reason
+
+
+@pytest.mark.browser
+@pytest.mark.parametrize("cancel", [False, True])
+def test_driver_failure_retains_elapsed_action_time(page, tmp_path, cancel):
+    from qabot.journeys.walker import WalkCancelled
+
+    page.set_content("<p>Ready</p>")
+
+    class FailingDriver(BrowserDriver):
+        def execute(self, action):
+            time.sleep(0.02)
+            if cancel:
+                raise KeyboardInterrupt()
+            raise ValueError("driver failure")
+
+    driver = FailingDriver("http://localhost", page)
+    llm = Decisions({"op": "click", "role": "button", "name": "Build"})
+    if cancel:
+        with pytest.raises(WalkCancelled) as exc:
+            walk(journey(), driver, page, llm, tmp_path)
+        result = exc.value.result
+    else:
+        result = walk(journey(), driver, page, llm, tmp_path)
+    assert result.outcome == Outcome.BLOCKED
+    assert result.steps[0].timing.action_s >= 0.02
+    assert result.steps[0].timing.actor_calls == 1
+
+
+def test_timing_rejects_invalid_report_measurements():
+    from pydantic import ValidationError
+
+    from qabot.journeys.models import StepResult, StepTiming
+
+    for field in ("actor_s", "judge_s", "action_s", "wait_s", "evidence_s", "total_s"):
+        for invalid in (-1, float("inf"), float("nan")):
+            with pytest.raises(ValidationError):
+                StepTiming(**{field: invalid})
+    for field in ("actor_calls", "judge_calls"):
+        for invalid in (-1, 1.5, True):
+            with pytest.raises(ValidationError):
+                StepTiming(**{field: invalid})
+    with pytest.raises(ValidationError):
+        StepResult(index=0, do="Read", see="Ready", outcome="held", started_offset_s=-1)

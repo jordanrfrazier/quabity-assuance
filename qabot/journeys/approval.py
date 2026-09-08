@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shlex
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -66,6 +67,52 @@ def _json_identity(value: dict) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _plan_repo_path(plan: ReviewPlan, plan_path: Path) -> Path:
+    repo = Path(plan.repo)
+    if not repo.is_absolute():
+        repo = plan_path.parent / repo
+    return repo
+
+
+def _git_output(repo: Path, args: list[str], label: str) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+    except FileNotFoundError as exc:
+        raise ApprovalError("git is required to approve journey plans") from exc
+    except (OSError, subprocess.CalledProcessError) as exc:
+        detail = ""
+        if isinstance(exc, subprocess.CalledProcessError):
+            detail = (exc.stderr or exc.stdout or "").strip()
+        if not detail:
+            detail = str(exc)
+        raise ApprovalError(f"could not resolve {label} for approval: {detail}") from exc
+    return completed.stdout.strip()
+
+
+def _target_git_binding(plan: ReviewPlan, plan_path: Path) -> dict[str, str]:
+    repo = _plan_repo_path(plan, plan_path)
+    top_level = Path(_git_output(repo, ["rev-parse", "--show-toplevel"], "target repository"))
+    try:
+        target_repo = str(repo.resolve(strict=True))
+        canonical_repo = str(top_level.resolve(strict=True))
+    except OSError as exc:
+        raise ApprovalError(f"could not resolve target repository for approval: {exc}") from exc
+    return {
+        "repo": canonical_repo,
+        "target_repo": target_repo,
+        "base_ref": plan.base,
+        "base_sha": _git_output(top_level, ["rev-parse", "--verify", f"{plan.base}^{{commit}}"], "base revision"),
+        "head_ref": plan.head,
+        "head_sha": _git_output(top_level, ["rev-parse", "--verify", f"{plan.head}^{{commit}}"], "head revision"),
+    }
+
+
 def _script_tokens(command: str) -> list[str]:
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|()<>\n")
@@ -123,9 +170,7 @@ def _looks_like_script(token: str) -> bool:
 
 
 def _script_identities(plan: ReviewPlan, plan_path: Path) -> dict[str, str]:
-    repo = Path(plan.repo)
-    if not repo.is_absolute():
-        repo = plan_path.parent / repo
+    repo = _plan_repo_path(plan, plan_path)
     cwd = Path(plan.startup.cwd)
     if not cwd.is_absolute():
         cwd = repo / cwd
@@ -173,6 +218,7 @@ def approve_plan(plan_path: Path, reviewer: str) -> Path:
         "plan_sha256": _json_identity(raw),
         "reviewer": reviewer,
         "approved_at": datetime.now(UTC).isoformat(),
+        "git": _target_git_binding(plan, plan_path),
         "setup_scripts": _script_identities(plan, plan_path),
     }
     approval_path = _approval_path(plan_path)
@@ -192,6 +238,29 @@ def require_approval(plan_path: Path) -> dict:
         raise ApprovalError(
             f"approval is stale because plan content changed; review and approve {plan_path} again"
         )
+    approved_git = approval.get("git")
+    if not isinstance(approved_git, dict):
+        raise ApprovalError(
+            f"approval is stale because it has no Git binding; review and approve {plan_path} again"
+        )
+    current_git = _target_git_binding(plan, plan_path)
+    if approved_git.get("repo") != current_git["repo"]:
+        raise ApprovalError(
+            "approval is stale because target repository changed; "
+            f"review and approve {plan_path} again"
+        )
+    if approved_git.get("target_repo") != current_git["target_repo"]:
+        raise ApprovalError(
+            "approval is stale because target repository changed; "
+            f"review and approve {plan_path} again"
+        )
+    for name in ("base", "head"):
+        key = f"{name}_sha"
+        if approved_git.get(key) != current_git[key]:
+            raise ApprovalError(
+                f"approval is stale because {name} revision changed; "
+                f"review and approve {plan_path} again"
+            )
     approved_scripts = approval.get("setup_scripts")
     if not isinstance(approved_scripts, dict):
         raise ApprovalError(f"approval has no valid setup script identities: {approval_path}")

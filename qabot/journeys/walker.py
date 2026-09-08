@@ -28,6 +28,7 @@ from qabot.journeys.models import (
     JourneyResult,
     StepOutcome,
     StepResult,
+    StepTiming,
 )
 from qabot.journeys.snapshot import trimmed_snapshot, visible_text
 from qabot.llm import LLMError
@@ -84,11 +85,11 @@ def redact_data(value, redact):
 
 
 OPS = BASE_OPS | {"press", "wait"}
-#: After every action the page is given this long to go quiet before it is read. A
-#: single-page app answers `goto` with its shell and draws the real page later; deciding
-#: from the shell is deciding from "Loading…".
-SETTLE_NETWORK_IDLE_MS = 8000
+#: Navigation and activation can render an application shell before its content.
+SETTLE_DOM_READY_MS = 8000
 SETTLE_PAUSE_S = 0.5
+#: Observe delayed events once before judgment, including after fast local edits.
+FINAL_OBSERVATION_MS = 500
 #: The page is "settled" when its visible text has not changed across this many
 #: consecutive samples, or when this much time has passed. A single-page app's own
 #: "Loading…" screen is text that changes, so it never counts as settled.
@@ -175,18 +176,13 @@ def page_checks(text: str) -> list[str]:
 
 
 def _settle(page) -> None:
-    """Wait for the page to stop changing; never fail the walk over a slow page.
-
-    Network idle is necessary and not sufficient: Langflow answers `goto` with a shell
-    that says "Loading…" and draws the page seconds later from its own store. So after
-    the network goes quiet the visible text is sampled until it holds still.
-    """
+    """Bound DOM readiness for navigation/activation without waiting for network idle."""
     with contextlib.suppress(Exception):  # a busy page is still a page we can read
-        page.wait_for_load_state("networkidle", timeout=SETTLE_NETWORK_IDLE_MS)
+        page.wait_for_load_state("domcontentloaded", timeout=SETTLE_DOM_READY_MS)
     deadline = time.monotonic() + SETTLE_MAX_S
     last, stable = None, 0
     while time.monotonic() < deadline:
-        time.sleep(SETTLE_PAUSE_S)
+        page.wait_for_timeout(SETTLE_PAUSE_S * 1000)
         text = _text_or_none(page)
         if text is None:
             continue  # mid-navigation; sample again
@@ -221,16 +217,20 @@ def _screenshot(page, artifacts: Path, index: int, n: int) -> str | None:
 
 
 def _decide(
-    llm, journey: Journey, step_index: int, page, history: list[str], *, redact=str
+    llm, journey: Journey, step_index: int, page, history: list[str], *, redact=str, timing=None
 ) -> dict:
-    step = journey.steps[step_index]
-    prompt = (
-        f"Journey: {journey.title}\nStep {step_index + 1}: DO: {step.do}\n"
-        f"EXPECT TO SEE: {step.see}\n"
-        f"Current URL: {page.url}\nLast actions: {json.dumps(history[-3:])}\n\n"
-        f"Page outline:\n{trimmed_snapshot(page)}"
-    )
-    return llm.complete_json(WALK_SYSTEM, redact(prompt), {"op": ""})
+    with _measure(timing, "evidence_s"):
+        step = journey.steps[step_index]
+        prompt = redact(
+            f"Journey: {journey.title}\nStep {step_index + 1}: DO: {step.do}\n"
+            f"EXPECT TO SEE: {step.see}\n"
+            f"Current URL: {page.url}\nLast actions: {json.dumps(history[-3:])}\n\n"
+            f"Page outline:\n{trimmed_snapshot(page)}"
+        )
+    if timing is not None:
+        timing.actor_calls += 1
+    with _measure(timing, "actor_s"):
+        return llm.complete_json(WALK_SYSTEM, prompt, {"op": ""})
 
 
 def _page_summary(page) -> str:
@@ -256,15 +256,54 @@ def _page_summary(page) -> str:
     return f"JSON value: {text[:800]}"
 
 
-def _judge(llm, step_see: str, page, *, expected_error=False, findings=(), redact=str) -> dict:
-    recorded = [{"oracle": finding.oracle, "detail": finding.detail} for finding in findings]
-    prompt = (
-        f"Expected to see: {step_see}\nDeliberately expects a rejection: {expected_error}\n"
-        f"Recorded runtime findings: {json.dumps(recorded)}\n\n{_page_summary(page)}"
-    )
-    return llm.complete_json(
-        JUDGE_SYSTEM, redact(prompt), {"verdict": "", "reason": "", "recorded_errors": ""}
-    )
+def _judge(
+    llm, step_see: str, page, *, expected_error=False, findings=(), redact=str, timing=None
+) -> dict:
+    with _measure(timing, "evidence_s"):
+        recorded = [{"oracle": finding.oracle, "detail": finding.detail} for finding in findings]
+        prompt = redact(
+            f"Expected to see: {step_see}\nDeliberately expects a rejection: {expected_error}\n"
+            f"Recorded runtime findings: {json.dumps(recorded)}\n\n{_page_summary(page)}"
+        )
+    if timing is not None:
+        timing.judge_calls += 1
+    with _measure(timing, "judge_s"):
+        return llm.complete_json(
+            JUDGE_SYSTEM, prompt, {"verdict": "", "reason": "", "recorded_errors": ""}
+        )
+
+
+@contextlib.contextmanager
+def _measure(timing, field):
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        if timing is not None:
+            setattr(timing, field, getattr(timing, field) + time.monotonic() - started)
+
+
+def _execute(driver, action, timing):
+    """Separate driver interaction duration from its bundled observation overhead."""
+    started = time.monotonic()
+    observation = None
+    op = action.params.get("op")
+    field = "wait_s" if op == "wait" else "action_s"
+    try:
+        observation = driver.execute(action)
+        return observation
+    finally:
+        elapsed = time.monotonic() - started
+        if op == "read":
+            timing.evidence_s += elapsed
+        else:
+            interaction = elapsed
+            if observation is not None:
+                measured = observation.evidence.get("elapsed_ms")
+                if isinstance(measured, (int, float)) and measured >= 0:
+                    interaction = min(elapsed, measured / 1000)
+            setattr(timing, field, getattr(timing, field) + interaction)
+            timing.evidence_s += elapsed - interaction
 
 
 def _to_action(decision: dict) -> Action | None:
@@ -326,7 +365,11 @@ def _inferred_finding(journey: Journey, step_see: str, reason: str) -> Finding:
     )
 
 
-def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path) -> StepResult:
+def _walk_step(
+    journey: Journey, index: int, driver, page, llm, artifacts: Path, walk_started: float
+) -> StepResult:
+    started = time.monotonic()
+    timing = StepTiming()
     step = journey.steps[index]
     actions: list[ActionRecord] = []
     findings: list[Finding] = []
@@ -337,27 +380,44 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
     cancelled = False
 
     def collect(observation):
-        for finding in _declared_findings(journey, step.do, observation, page):
-            finding = redact_data(finding, redact)
-            if not any(
-                (old.oracle, old.detail) == (finding.oracle, finding.detail) for old in findings
-            ):
-                findings.append(finding)
+        with _measure(timing, "evidence_s"):
+            for finding in _declared_findings(journey, step.do, observation, page):
+                finding = redact_data(finding, redact)
+                if not any(
+                    (old.oracle, old.detail) == (finding.oracle, finding.detail) for old in findings
+                ):
+                    findings.append(finding)
+
+    def observe():
+        collect(_execute(driver, Action(kind="browser", params={"op": "read"}), timing))
+
+    def screenshot():
+        with _measure(timing, "evidence_s"):
+            return _screenshot(page, artifacts, index, len(actions))
 
     for _ in range(MAX_ACTIONS_PER_STEP):
         try:
-            decision = _decide(llm, journey, index, page, history, redact=redact)
+            decision = _decide(llm, journey, index, page, history, redact=redact, timing=timing)
             op = decision.get("op")
             if op == "done":
-                collect(driver.execute(Action(kind="browser", params={"op": "read"})))
-                verdict = _judge(
-                    llm,
-                    step.see,
-                    page,
-                    expected_error=step.expected_error,
-                    findings=findings,
-                    redact=redact,
-                )
+                with _measure(timing, "wait_s"):
+                    page.wait_for_timeout(FINAL_OBSERVATION_MS)
+                observe()
+                judged_count = len(findings)
+                try:
+                    verdict = _judge(
+                        llm,
+                        step.see,
+                        page,
+                        expected_error=step.expected_error,
+                        findings=findings,
+                        redact=redact,
+                        timing=timing,
+                    )
+                finally:
+                    # Model calls do not pump Playwright events. Drain their backlog too,
+                    # even when the call fails or the operator cancels it.
+                    observe()
                 reason = str(verdict.get("reason", ""))
                 v = verdict.get("verdict")
                 runtime_errors = [
@@ -366,7 +426,14 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
                     if f.severity is Severity.BUG and f.oracle not in {None, "page_error_screen"}
                 ]
                 if v == "held":
-                    if (
+                    if step.expected_error and any(
+                        finding.severity is Severity.BUG for finding in findings[judged_count:]
+                    ):
+                        reason = (
+                            "New runtime failures arrived during judgment and were not judged. "
+                            + reason
+                        )
+                    elif (
                         step.expected_error
                         and runtime_errors
                         and verdict.get("recorded_errors") != "expected"
@@ -397,7 +464,7 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
             if action is None:
                 reason = f"model returned an unusable action: {decision!r}"
                 break
-            obs = driver.execute(action)
+            obs = _execute(driver, action, timing)
             actions.append(
                 ActionRecord(
                     op=str(action.params["op"]),
@@ -408,18 +475,23 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
                 )
             )
             collect(obs)
-            _settle(page)
-            actions[-1].screenshot = _screenshot(page, artifacts, index, len(actions))
+            if op in {"goto", "click", "press"}:
+                with _measure(timing, "wait_s"):
+                    _settle(page)
+            actions[-1].screenshot = screenshot()
             # The driver drains events before settling; collect the delayed events too.
-            collect(driver.execute(Action(kind="browser", params={"op": "read"})))
+            observe()
             history.append(
                 obs.summary + (f" Error: {obs.evidence.get('error')}" if not obs.ok else "")
             )
+            if not obs.ok:
+                reason = str(obs.evidence.get("error") or obs.summary or "browser action failed")
+                break
         except KeyboardInterrupt:
             cancelled = True
             reason = "Execution cancelled by operator"
             if actions and not actions[-1].screenshot:
-                actions[-1].screenshot = _screenshot(page, artifacts, index, len(actions))
+                actions[-1].screenshot = screenshot()
             break
         except LLMError as exc:
             reason = f"Model unavailable: {exc}"
@@ -427,6 +499,7 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
         except Exception as exc:  # noqa: BLE001 -- preserve completed actions on driver/model failures.
             reason = f"Step execution blocked: {type(exc).__name__}: {exc}"
             break
+    timing.total_s = time.monotonic() - started
     result = redact_data(
         StepResult(
             index=index,
@@ -437,6 +510,8 @@ def _walk_step(journey: Journey, index: int, driver, page, llm, artifacts: Path)
             actions=actions,
             findings=findings,
             screenshot=actions[-1].screenshot if actions else None,
+            timing=timing,
+            started_offset_s=started - walk_started,
         ),
         redact,
     )
@@ -459,11 +534,7 @@ def unmet_preconditions(journey: Journey, env: dict[str, str] | None) -> list[st
         resolved = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", lambda m: env[m[1]], wanted)
         if have is None:
             unmet.append(f"{key} is required and this instance does not set it")
-        elif (
-            str(have) != resolved
-            if references
-            else str(have).strip().lower() != resolved.strip().lower()
-        ):
+        elif str(have) != resolved:
             unmet.append(f"{key} does not match its reviewed precondition")
     return unmet
 
@@ -471,6 +542,7 @@ def unmet_preconditions(journey: Journey, env: dict[str, str] | None) -> list[st
 def walk(
     journey: Journey, driver, page, llm, artifacts: Path, env: dict[str, str] | None = None
 ) -> JourneyResult:
+    walk_started = time.monotonic()
     Path(artifacts).mkdir(parents=True, exist_ok=True)
     results: list[StepResult] = []
     outcome = Outcome.PASS
@@ -494,7 +566,7 @@ def walk(
             )
             continue
         try:
-            result = _walk_step(journey, index, driver, page, llm, artifacts)
+            result = _walk_step(journey, index, driver, page, llm, artifacts, walk_started)
         except WalkCancelled as exc:
             results.append(exc.result)
             results.extend(
