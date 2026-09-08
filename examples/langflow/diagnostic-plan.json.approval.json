@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "plan_path": "/private/tmp/qabot-cli-2026-09-06/examples/langflow/diagnostic-plan.json",
+  "plan_sha256": "0da194a1e645e9f8e474f6fd06b176263192eda3ea12c6db1f2d5bb011fe6a21",
+  "reviewer": "Codex automated review under user-authorized local test; not human-confirmed",
+  "approved_at": "2026-09-06T17:13:25.817323+00:00",
+  "setup_scripts": {}
+}

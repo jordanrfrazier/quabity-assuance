@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "plan_path": "/private/tmp/qabot-cli-2026-09-06/examples/langflow/assistant-plan.json",
+  "plan_sha256": "3e44b70d47a8aa2cac40b6911a9ace608fbdf6102ba2e9958595570feb1ebe15",
+  "reviewer": "Codex automated review: repeatable exact-d14 Assistant journey, existing-workspace New Flow or first-run Create first flow, separate blank canvas, IBM granite, real Playground response",
+  "approved_at": "2026-09-06T17:47:49.220732+00:00",
+  "setup_scripts": {}
+}

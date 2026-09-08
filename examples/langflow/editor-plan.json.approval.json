@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "plan_path": "/private/tmp/qabot-cli-2026-09-06/examples/langflow/editor-plan.json",
+  "plan_sha256": "9652439235367c5de2efdafd13c68cc6e17db6d874bcc580c225181d5e162db8",
+  "reviewer": "Codex automated review; not human-confirmed",
+  "approved_at": "2026-09-06T18:31:59.318517+00:00",
+  "setup_scripts": {}
+}

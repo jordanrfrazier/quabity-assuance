@@ -1,10 +1,12 @@
 # qabot: Human-Reviewed QA Journeys
 
 Status: Working draft; local CLI and reviewed local startup confirmed, release contract incomplete.
-Date: 2026-09-06.
+Date: 2026-09-07.
 Decision maker for this drafting process: Jordan.
-Project directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
-Working branch: `feature/qabot-scan`.
+Implementation directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`.
+Working branch: `feature/qabot-journeys-cli`.
+Original project: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`,
+branch `feature/qabot-scan`; its earlier draft is preserved.
 
 ## 1. Product Definition
 
@@ -82,6 +84,10 @@ delivery does not imply offline model execution; model access remains D-06.
 The future web interface is a product direction, not a requirement to build a web
 API, background service, or extensibility framework in this release. Its scope and
 implementation effort will be assessed after the CLI workflow is validated.
+
+Workflow learning and reuse are deferred, unimplemented proposals. Their design
+details live in the [v2 follow-up directory](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v2/README.md).
+This deferral does not move the existing v1 release gaps into v2.
 
 ## 4. Core Workflow
 
@@ -240,6 +246,9 @@ implementation or selecting unresolved release details.
 | FR-16 | Execute the reviewed startup plan under the profiles required by selected journeys. | The developer corrects a proposed startup command or setting, reviews the plan, and qabot uses that reviewed content. Each journey is associated with the profile actually used; changing the profile requires the applicable startup/configuration procedure. The run does not enumerate unrelated configuration combinations or acquire missing secrets automatically. |
 | FR-17 | Enforce and report local setup readiness and lifecycle. | A missing prerequisite or failed startup prevents dependent tests from being treated as executed. The report identifies the failing setup operation and affected journeys. On completion, cancellation, or failure, qabot attempts the reviewed cleanup, stops processes it owns, preserves diagnostics, and reports cleanup failure. It does not terminate unrelated processes. Initial-data reset is recorded separately from browser and process readiness. |
 | FR-18 | Reuse valid approval for unchanged reruns and reject stale approval before affected actions. | An unchanged approved plan and journey rerun without another prompt while capturing fresh results. Changing a startup command, its referenced executable setup content, a profile, or a journey expectation requires review of the affected version before it executes. The CLI identifies what changed; each run retains the exact approved versions it used. |
+| FR-19 | Measure execution latency and model calls without inventing historical measurements. | New executed steps record monotonic durations for actor requests, judge requests, browser actions, readiness waits, evidence collection, and total step execution, plus actor/judge call counts. Failures and cancellation retain partial timing; old or unexecuted steps show unknown timing. Request duration is not described as provider-internal reasoning time. |
+| FR-20 | Wait for relevant browser readiness while preserving failure detection. | Local form edits do not depend on network idle. Navigation and asynchronous operations use bounded observable readiness, and final judgment retains bounded observation for delayed runtime failures. An unfinished operation or delayed crash cannot become PASS merely because an action returned. |
+| FR-21 | Retain inspectable, portable local run evidence in durable storage by default. | Omitted output paths create unique run directories below the primary Git workspace's `v1/reports/` (or the invocation directory's `v1/reports/` outside Git). Explicit output paths remain supported and existing runs cannot be overwritten. New report media references remain valid when the full bundle is copied. Historical archives are copied and hash-verified with original identities and originals preserved. |
 
 ## 6. Outcome Contract for Review
 
@@ -303,6 +312,25 @@ general accuracy claim.
 | AC-11 | Startup discovery is reviewable and uncertainty is explicit. | Use a supported repository with documented startup/configuration and a control variant containing conflicting instructions or a missing prerequisite. Inspect the cited plan before commands execute. Correct a command and verify that only reviewed content is executed; unresolved required setup prevents its dependent operation. Maps to FR-12, FR-15, FR-16. |
 | AC-12 | Setup failure and cleanup remain visible. | Separately exercise startup failure, missing fixture/reset capability, cancellation after startup, and cleanup failure. Check that affected journeys and unverified state are accounted for, diagnostics survive, and unrelated processes are untouched. A stale healthy instance must not be accepted as proof that this run started the requested revision/profile. Maps to FR-05, FR-06, FR-10, FR-14, FR-16, FR-17. |
 | AC-13 | Approval is reusable, version-specific, and checked before execution. | Approve a startup plan and two journeys. Rerun one unchanged journey without another prompt and confirm fresh evidence. In separate cases change its expectation, its profile, a startup command, and a referenced setup script while keeping its path; the affected content must await renewed review before executing. The other journey retains its own approval. Prior results retain their original identities. Maps to FR-03, FR-04, FR-09, FR-12, FR-16, FR-18. |
+| AC-14 | Timing explains measured execution without manufacturing a baseline. | Inspect successful, failed, and cancelled step timing and model call counts in serialized and human-readable reports. Legacy reports display unknown timing; approximate video chapters appear only where measured journey-relative offsets exist. Compare equivalent measured runs before claiming a speedup. Maps to FR-07, FR-09, FR-13, FR-19. |
+| AC-15 | Reduced readiness waits do not weaken verdicts. | Verify that form filling avoids network-idle waits, navigation uses bounded readiness, pending asynchronous work remains unverified, and a delayed browser crash still fails. Retain the real verdict and evidence from a current Langflow diagnostic run. Maps to FR-05, FR-07, FR-10, FR-17, FR-20. |
+| AC-16 | Evidence survives worktree removal or report relocation. | Run from a linked worktree without `--out` and confirm output under the primary workspace. Verify explicit output and no-overwrite behavior, compare all migrated archive hashes, then inspect copied HTML/Markdown reports and decode video in Chrome. New bundle-relative media and measured chapter navigation must work; original historical evidence remains preserved. Maps to FR-07, FR-09, FR-13, FR-21. |
+
+### Accepted V1 Performance and Storage Work
+
+On 2026-09-07 Jordan approved measurement, readiness improvements, and durable local
+evidence. FR-19 through FR-21 and AC-14 through AC-16 define that work; they do not
+set a production speed or cost threshold. The durable report root for this project
+is `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/`.
+Reports remain local and Git-ignored. This location is not a complete retention,
+redaction, or deletion policy under D-06.
+
+The historical four-step diagnostic took approximately 1 minute 45 seconds and
+contained eight browser actions. One actor request and one judge request per action
+would imply 16 serial model requests, but those reports lack per-phase timing and
+measured call counts. That estimate does not establish the latency distribution or
+a speedup from the new work. Phase timings measure elapsed operations, not hidden
+provider reasoning. Journey-relative video offsets are approximate chapters.
 
 ### Metrics to Define Before Scoring
 
@@ -336,14 +364,15 @@ proposals for discussion.
 | D-01 | First-release surface. | Resolved: local CLI. Jordan evaluates usability first; a local web interface is a later direction. Exact command grammar remains to be specified. | Delivery choice resolved; detailed CLI acceptance is proposed in section 4. |
 | D-02 | Environment responsibility and provisioning boundary. | Resolved: repo/documentation-based discovery, reviewed local startup/setup, explicit journey profiles, readiness checks, and per-test configuration/state evidence. Developer supplies host tools and secrets. General infrastructure provisioning is deferred. | Scope resolved; supported setup types remain D-04 and detailed outcome rules D-05. |
 | D-03 | Human-review contract and approval reuse. | Resolved: explicit approval once per startup-plan/journey version; unchanged reruns need no further prompt; execution-affecting edits require renewed review. Detailed change cases are specified in section 4 for acceptance review. | Policy resolved; CLI syntax and artifact encoding remain to be specified. |
-| D-04 | Supported inputs and targets: change formats, intent sources, app types, OS, browsers, and initial integration boundary. | Asked. Recommendation: macOS and Chromium, local Git repo with base/head revisions and optional change description, validated on Langflow plus one unrelated web app. Not accepted yet; exact supported setup types also need definition. | Scope, authoring fidelity, installation and compatibility acceptance. |
+| D-04 | Supported inputs and targets: change formats, intent sources, app types, OS, browsers, and initial integration boundary. | Accepted by the subsequent build instruction: macOS and Chrome/Chromium, local Git repository with base/head and optional description; validate Langflow plus the unrelated bundled shop. Initial setup is reviewed local commands, existing host tools, supplied secrets, and readiness checks. | Implementation and walkthrough validation underway; not a cross-platform support promise. |
 | D-05 | Outcome and execution rules, including negative tests, tool failures, partial runs, cancellation, and any exit codes. | Section 6 is proposed for review. | Reliable reporting and acceptance tests. |
-| D-06 | Model access and data handling; required evidence formats and retention. | Not decided. | Privacy, cost, installation, evidence completeness. |
+| D-06 | Model access and data handling; required evidence formats and retention. | Partially decided on 2026-09-07: durable local, Git-ignored reports under the primary workspace's `v1/reports/`, preserving historical evidence. Model/data boundaries and complete retention/redaction/deletion policy remain open. | Privacy, cost, installation, evidence completeness. |
 | D-07 | Quantitative quality, time, and cost thresholds; independent adjudication method and evaluation corpus. | Metrics and candidate cases listed; no target numbers accepted. | A measurable release decision. |
 | D-08 | Initial release audience, rollout stages, acceptance owner, and support/rollback responsibility. | Jordan is the first CLI usability evaluator. Broader release audience and operating responsibilities remain undecided. | Release plan and operational readiness. |
 
-Next drafting step: select the supported inputs and local application setups under
-D-04, then complete the outcome contract under D-05.
+Next drafting step: resolve the outcome, data-handling, quality, and release decisions
+under D-05 through D-08. The local pilot below supplies implementation evidence; it does
+not silently settle release ownership, quality thresholds, or privacy policy.
 Once these are agreed, complete the production requirements and validation thresholds,
 check requirement-to-acceptance traceability, and submit the complete PRD for review.
 
@@ -351,8 +380,10 @@ check requirement-to-acceptance traceability, and submit the complete PRD for re
 
 Local evidence was inspected on 2026-09-06. Saved browser reports were read, but their
 screenshots were not independently re-adjudicated during this PRD assessment.
-Gitignored artifacts are available in this checkout; they are not a durable release
-evaluation package yet. External market assertions have not been reverified.
+The earlier spike artifacts below remain at their recorded locations. The local
+CLI pilot's durable report location is listed in section 12. Retaining those files
+does not make them an independently adjudicated release evaluation package.
+External market assertions have not been reverified.
 
 - [Project assessment and test history](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/qabot_current_state.md).
 - [Journey spike design](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/superpowers/specs/2026-09-05-user-journeys-design.md).
@@ -375,3 +406,172 @@ evaluation package yet. External market assertions have not been reverified.
 | 2026-09-06 | Each test must expose the relevant system configuration/state to its reviewer; configuration before startup matters to test scope. Repo/documentation-based application setup is desired, with v1 versus later provisioning scope still under discussion. | Jordan's explicit state-visibility requirement and provisioning question. |
 | 2026-09-06 | Include repo-informed, human-reviewed local startup in v1, with readiness checks, explicit per-test configuration/state evidence, and actionable unsupported-setup handling. Defer general infrastructure provisioning. | Jordan's explicit confirmation of the reviewed local-startup boundary. Resolves D-02 and the provisioning scope left open in the preceding entry. |
 | 2026-09-06 | Approve each startup-plan and journey version once; rerun unchanged versions without another approval prompt; review execution-affecting edits before they execute. | Jordan's explicit confirmation of approval once per version. Resolves D-03. |
+| 2026-09-07 | Add v1 phase timing and call counts, improve bounded readiness without losing failure evidence, and retain local reports durably. Record unimplemented follow-up design in `v2/`; keep existing v1 release gaps in scope. | Jordan's explicit approval of v1 improvements and request for durable reports and a follow-up folder. |
+
+## 12. Implementation-Informed Pilot
+
+Jordan subsequently requested implementation, a manual walkthrough, and iterative
+real-browser validation of PRs 14931 and 14913. The isolated implementation lives
+at `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`, branch `feature/qabot-journeys-cli`. This
+section distinguishes observed pilot behavior from production requirements above.
+
+### Historical Pilot CLI Contract
+
+This is the September 6 pilot baseline. The accepted September 7 timing, readiness,
+and default output changes are specified above in FR-19 through FR-21.
+
+```text
+qabot journeys plan --repo PATH --base REF --head REF [--description FILE] --out PLAN.json
+qabot journeys approve PLAN.json --reviewer NAME
+qabot journeys run PLAN.json --out NEW_RUN_DIR [--headed] [--channel chrome|chromium]
+                   [--env-file PRIVATE_DOTENV] [--journey ID]
+```
+
+- Discovery is non-executing and bounded. It collects scoped Git changes, current
+  documentation, manifests, configuration definitions, related tests, and local
+  UI/import entry points. Real environment files are excluded from model evidence.
+- Plans are editable JSON. Approval is adjacent JSON recording reviewer identity,
+  semantic plan identity, timestamp, referenced local executable script hashes,
+  canonical target repository, and resolved base/head commits. Mutable ref drift
+  invalidates approval even if plan text is unchanged; older approvals without
+  Git bindings require renewed review. This pilot binding is stricter than the
+  cross-revision procedure reuse described in section 4.
+  Automated example reviews remain explicitly agent-reviewed, never human-confirmed.
+- Run checks approval before launching, checks the actual checkout revision, and
+  refuses any existing listener on the target port before setup and startup,
+  including unhealthy services. Readiness requires a live reviewed process and
+  listeners owned by its process group, verified with local `lsof`. Detached
+  servers and unverifiable ownership block. Unknown or mismatched required
+  settings block execution; string comparisons preserve case and whitespace.
+  Listener ownership is rechecked before each journey, after any reviewed reset.
+- `--env-file` loads only credential names required by the plan. Explicit nonsecret
+  plan values take precedence. References resolve against the source environment
+  before plan overrides, independent of mapping order; referenced values remain
+  in the redaction set even when a source name is cleared or overwritten.
+  Discovery preserves aliases and ordinary SQLite/path configuration, recognizes
+  `APIKEY`, and rejects credential-bearing health URLs before draft persistence.
+  The model acts using `${NAME}` references rather
+  than receiving credential values. Startup is not an untrusted-code sandbox.
+  Before report creation, run preflight rejects literal recognized credential
+  environment entries and credential-bearing URLs, requiring full `${NAME}`
+  references. It preserves ordinary settings and file paths, does not rewrite
+  reviewed plans, and does not claim general secret detection in arbitrary fields.
+- A fresh browser context is used per journey. Optional reviewed reset commands
+  support applications that expose a reset mechanism; lack of persistent-state
+  reset is reported rather than concealed.
+- Every executed journey requires video. HTML, JSON, Markdown, screenshots, startup
+  logs, and partial-result explanations are retained under a new run directory.
+  Executed setup/reset commands retain redacted combined stdout/stderr in numbered
+  per-command logs. Configuration metadata and command failure diagnostics name
+  those logs; setup/reset capture failures cannot silently count as success.
+  Completed steps and findings survive context cleanup/video-finalization failures;
+  cleanup diagnostics can block the result without replacing its recorded evidence.
+- The pilot exit contract is 0 for all PASS, 1 for any FAIL, 2 for BLOCKED
+  without FAIL or invalid input/approval, and 130 for user cancellation with partial
+  evidence retained. This is the implementation baseline for
+  D-05 review, not an assertion that all release-policy cases were accepted.
+- Intentional application rejection is evaluated against its expected diagnostic;
+  it is not automatically a defect. Unrelated browser crashes cannot become PASS
+  solely because a step is marked `expected_error`.
+- A failed browser action retains its action record and available evidence, then
+  blocks before another actor or judge call can declare success. Existing observed
+  application defects retain their FAIL precedence; tool failure is not itself
+  proof of an application defect. Automatic interaction recovery is deferred.
+- Bounded browser waits use observable visible/hidden/enabled conditions, up to
+  60 seconds per action. A submitted asynchronous build is not proof of completion.
+- Credential text is redacted from model inputs and reports, and credential-named
+  references require masked browser inputs. General pixel redaction is absent;
+  an application reflecting a secret visibly can expose it in recorded evidence.
+
+### Evidence and Findings
+
+1. Installed headed Google Chrome interaction and recording passed. A local runner
+   integration test decoded its WebM in Chrome and confirmed owned-process cleanup.
+2. Real discovery initially timed out, hallucinated a fictional shop from unrelated
+   planning-document diffs, omitted the Assistant route, and lacked startup details.
+   Those attempts were retained. Scoped diffs and semantic excerpts corrected the
+   evidence collection. Langflow v3 discovery finds a documented startup command
+   and the Assistant flow-build route, but still needed substantive review of flags,
+   fixtures, and successful-run expectations. Discovery quality is not release-proven.
+3. The independent shop's fresh complete run passes widget/cart and valid checkout.
+   Its expired-card journey fails both the generic message and lost-cart assertions;
+   all three videos are playable (29.24, 35.56, 50.76 seconds). Earlier BLOCKED
+   observations and invalid discovery attempts remain retained. Live shop discovery
+   v4 corrects a known-defect-as-success oracle seen in v3; startup review remains
+   necessary, and one success does not establish general authoring accuracy.
+4. Exact fixed Langflow revision `d14dec904fc55c5e79cfeb8dec2bdf449e638f9d`
+   contains both PR fixes. Real Watsonx inference created and successfully executed
+   Chat Input -> Agent -> Chat Output through the API with restricted/lazy flags.
+   API proof is not substituted for the separately required editor/Assistant videos.
+   The packaged Assistant run now passes all seven browser steps, including actual
+   three-node/two-edge generation, canvas application, and a completed Watsonx
+   Playground reply. Root inspected its final screenshot and decoded its 171.36-second
+   video in Chrome. A second same-database run also passes using dashboard New Flow,
+   preserving the first flow and producing a new completed reply (155.32-second video).
+   The repeat records a changed target lockfile; no application source changed.
+   Expected auto-login 403 and completed-stream abort QUESTION evidence remain
+   visible in results, so this is not a claim of an error-free network trace.
+5. The PR14931 recorded CLI browser run correctly FAILS the requested expectation.
+   The canvas shows only the missing-model complaint, not the policy explanation.
+   Source investigation identifies an early terminal AG-UI error before the enriched
+   vertex error arrives. The legacy build SSE does contain the note. This is a
+   residual user-facing defect, not a reason to weaken the browser acceptance test.
+6. The editor route completes browser login, fresh-flow creation, sidebar additions,
+   exact model selection, both named connections, and real Playground inference.
+   Root decoded its final 249.88-second video and independently reviewed canvas/response
+   screenshots; database inspection confirms three nodes and two correct edges.
+   An earlier run shortened the reviewed prompt and overstated a date response's
+   relevance. Literal-input guidance plus an explicit submitted-input check corrected
+   that case: final3 preserves the full user message and receives the intended real
+   reply. All 13 steps are independently supported. Generic action-fidelity enforcement
+   remains a release requirement, not a guarantee established by this example.
+
+Historical pilot code verification: 649 tests passed, 1 legacy live-model test deselected;
+Ruff and whitespace checks passed. The real Claude/Watsonx browser runs above are
+separate product evidence, not substituted by mocked model tests.
+
+Pilot walkthrough and retained evidence locations:
+
+The original CLI archive at `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/` was
+copied to the durable report root on September 7, preserving run directory names.
+All 1,306 copied files matched the original SHA-256 hashes before report media-path
+normalization. The originals remain retained; relocation does not change their
+historical verdicts or supply missing timing. The
+[migration manifest](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/migration-manifest.json)
+records the source hashes.
+
+- [Walkthrough](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/WALKTHROUGH.md).
+- [Langflow diagnostic](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-diagnostic-run1/report.html).
+- [Langflow Assistant](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-assistant-20260906-1343/report.html).
+- [Independent shop](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/shop-20260906-final/report.html).
+- [Langflow editor](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-editor-20260906-final3/report.html).
+- [Langflow discovery v3](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-20260906/discovered-plan-v3.json).
+- [Shop validation notes](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/shop/live-validation-report.md).
+
+### Remaining Release Gaps
+
+The following requirements are not silently marked complete by the pilot:
+
+- Independently reusable startup/journey approvals: current implementation binds
+  the entire plan, so unrelated journey edits also invalidate it.
+- Universal effective-configuration, role, and fixture attestation: supplied
+  environment and health readiness are distinguished, but arbitrary application
+  state cannot yet be verified automatically. Langflow-specific API/process
+  observations are supplementary evidence, not a generic attestation capability.
+- Dependency and prebuilt-asset identity, setup-script indirection, supported
+  provisioning recipes, and complete cancellation/failure-lifecycle guarantees
+  require explicit production acceptance coverage.
+- Cross-origin SSO, credential lifecycle, retention policy, model cost budgets,
+  independent accuracy thresholds, release owner, rollout, and rollback remain
+  D-05 through D-08 decisions.
+- The current model reads text/accessibility outlines, not visual pixels. Actual
+  screenshot/video review is required to adjudicate spatial visibility and overlap;
+  text-based PASS is not a visual-correctness guarantee.
+- Exact reviewed-action fidelity needs enforcement and acceptance coverage. A changed
+  submitted value must be surfaced as a tool deviation and must not receive an
+  unqualified reviewed-journey PASS. Preserve separately verified application
+  behavior, such as successful inference, without claiming exact-input compliance.
+
+Production acceptance must include both known-broken and known-fixed applications,
+independent adjudication of the actual videos, no missed known defects labeled PASS,
+and a first-use walkthrough by Jordan. Passing unit tests alone does not satisfy it.

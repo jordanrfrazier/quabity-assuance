@@ -1,0 +1,136 @@
+{
+  "repo": "/private/tmp/qabot-cli-2026-09-06/demo",
+  "base": "HEAD~1",
+  "head": "HEAD",
+  "description": "Review the bundled demo shop's user-visible cart and checkout behavior. Exercise adding\na widget and completing an ordinary purchase. Also examine the expired-card path, which\nthe repository describes as a known defect, while distinguishing an expected payment\nrejection from an unrelated application or browser failure.\n",
+  "startup": {
+    "command": "",
+    "cwd": ".",
+    "health_url": "http://127.0.0.1:8000/health",
+    "env": {},
+    "required_env": [],
+    "setup_commands": [],
+    "reset_command": null,
+    "sources": [
+      "app.py",
+      "server.py",
+      "e2e/test_shop_flows.py"
+    ]
+  },
+  "journeys": [
+    {
+      "id": "add-widget-to-cart",
+      "title": "Shopper adds a widget to their cart",
+      "persona": "First-time shopper browsing the demo shop",
+      "goal": "Add a single widget to a new cart and see it reflected with the correct price",
+      "because": "The bundled e2e suite records this as the baseline shopper action: adding a widget to an empty cart and seeing it priced in the cart (test_add_item_to_cart, e2e/test_shop_flows.py L30-35).",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop state has been reset (state.clear()) so no pre-existing carts/orders exist, per ShopState.clear in app.py L52-58"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to the demo shop's base URL served by server.py (http://127.0.0.1:8000)",
+          "see": "The shop's landing surface loads without error",
+          "expected_error": false
+        },
+        {
+          "do": "Locate and use the shop's mechanism for adding a widget to a new cart (per CATALOG entry 'widget' priced at 1000 cents, app.py L27)",
+          "see": "A cart is created and now contains one widget line item",
+          "expected_error": false
+        },
+        {
+          "do": "View the resulting cart",
+          "see": "Cart shows one widget item and a total of 1000 (matching CATALOG['widget'] price, app.py L27), consistent with cart_view's total calculation (app.py L69-72)",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_add_item_to_cart",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "checkout-valid-card",
+      "title": "Shopper completes an ordinary purchase with a valid card",
+      "persona": "Returning shopper buying gadgets",
+      "goal": "Fill a cart with gadgets and successfully check out using a valid card, receiving a confirmed order",
+      "because": "The e2e suite documents this as the canonical successful purchase path: checkout with a good card yields a confirmed order with an order id (test_checkout_with_valid_card, e2e/test_shop_flows.py L37-44).",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop state has been reset so no pre-existing carts/orders exist"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to the demo shop's base URL",
+          "see": "The shop's landing surface loads without error",
+          "expected_error": false
+        },
+        {
+          "do": "Add 2 gadgets to a new cart (CATALOG['gadget'] priced at 2500 cents each, app.py L27)",
+          "see": "Cart now contains gadgets with a total of 5000 cents",
+          "expected_error": false
+        },
+        {
+          "do": "Proceed to checkout and submit payment using the valid card option (card_token 'valid', one of the accepted CARD_TOKENS, app.py L30)",
+          "see": "Checkout succeeds and the shopper is shown a confirmed order with an order id, matching status 'confirmed' from the checkout flow (e2e/test_shop_flows.py L41-43)",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_checkout_with_valid_card",
+      "provenance": "inferred_from_diff"
+    },
+    {
+      "id": "checkout-expired-card",
+      "title": "Shopper's checkout is refused for an expired card, and the cart survives",
+      "persona": "Shopper attempting to pay with an expired card",
+      "goal": "Attempt checkout with an expired card, observe the expected payment rejection, and verify the cart is preserved afterward",
+      "because": "The e2e suite documents that an expired card must be refused (HTTP 402, message mentioning 'expired') while the cart remains intact afterward (test_checkout_with_expired_card_preserves_cart, e2e/test_shop_flows.py L46-56). The repository's module docstring states this path is a known/deliberate defect area worth close observation to distinguish an expected rejection from an unrelated failure (app.py L12-16).",
+      "preconditions": {
+        "settings": {},
+        "state": [
+          "Shop state has been reset so no pre-existing carts/orders exist"
+        ]
+      },
+      "steps": [
+        {
+          "do": "Navigate to the demo shop's base URL",
+          "see": "The shop's landing surface loads without error",
+          "expected_error": false
+        },
+        {
+          "do": "Add 3 widgets to a new cart",
+          "see": "Cart contains 3 widgets",
+          "expected_error": false
+        },
+        {
+          "do": "Proceed to checkout and submit payment using the expired card option (card_token 'expired', app.py L30)",
+          "see": "Checkout is refused with a payment-rejection response whose message references the card being expired, matching the expected 402 outcome (e2e/test_shop_flows.py L52-53) rather than a crash or unrelated failure",
+          "expected_error": true
+        },
+        {
+          "do": "Return to view the same cart after the refused payment",
+          "see": "The cart still contains its items (not emptied by the failed payment), matching the expectation that the cart is preserved (e2e/test_shop_flows.py L54-56); note the repository flags this expired-card path as an area to scrutinize for a deliberate defect (app.py L12-16), so any deviation from this preserved-cart/refusal behavior should be reported precisely as observed rather than assumed",
+          "expected_error": false
+        }
+      ],
+      "traces_to": "e2e/test_shop_flows.py::test_checkout_with_expired_card_preserves_cart",
+      "provenance": "inferred_from_diff"
+    }
+  ],
+  "unresolved": [
+    "No explicit process-start command (e.g. a __main__ entrypoint or documented CLI invocation) was found in the provided evidence for server.py or app.py; the health_url is inferred from BASE_URL in e2e/test_shop_flows.py (http://127.0.0.1:8000) and server.py's use of an ephemeral/127.0.0.1 uvicorn server, but the actual launch command, working directory, and any setup/install commands are unconfirmed.",
+    "No README.md content was supplied despite it being the expected source for startup/env instructions; required_env, setup_commands, and any secrets are therefore unknown and left empty rather than invented.",
+    "The provided app.py excerpt shows only JSON-returning endpoints (JSONResponse/Response imports, Pydantic request models such as AddItemRequest and CheckoutRequest) with no evidence of HTML templates, forms, or a served frontend (no HTMLResponse/Jinja2Templates import visible). Since the execution environment is a browser, it is unresolved whether the documented cart/checkout actions (POST /cart/items, POST /checkout/submit) are reachable via an actual browsable UI (e.g., an HTML form) versus only via direct API calls; the journeys above describe the shopper-facing intent from the e2e suite but the concrete UI entry points (buttons, forms, URLs) for 'add to cart' and 'checkout' are not confirmed in the evidence and should be verified against the running app or additional documentation.",
+    "Whether /reset is exposed as a browser-usable action (vs. an API-only convenience for test harnesses) is unconfirmed, so reset_command was left null rather than assumed; it is unclear how a browser-driven QA run should return the shop to a clean state between journeys.",
+    "The full app.py file is truncated after line ~180; the /checkout/submit, /cart/{cart_id}, and /refund handlers (and any additional UI-serving routes) were not shown, so their exact response shapes and any related UI affordances are inferred only from the e2e test assertions, not from source.",
+    "Startup command is unresolved."
+  ],
+  "sources": {
+    "app.py": "Defines the shop's data model, CATALOG prices, CARD_TOKENS ('valid'/'expired'/'declined'), and the /reset, /health, /cart/items endpoints; documents the expired-card path as a deliberate defect area.",
+    "server.py": "Shows how the FastAPI app is served on a real 127.0.0.1 origin via uvicorn, supporting health_url inference; no explicit launch command shown.",
+    "e2e/test_shop_flows.py": "Source of the shopper-facing flow language (add widget, checkout with valid card, checkout with expired card preserving the cart, unknown sku) used to derive journeys and expected observations; BASE_URL confirms the local origin http://127.0.0.1:8000."
+  }
+}

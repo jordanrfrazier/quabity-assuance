@@ -1,8 +1,136 @@
 # qabot Current State
 
-Last assessed: 2026-09-06.
-Directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
-Branch: `feature/qabot-scan`. Current HEAD: `df7d2d4`.
+## Local Commit Checkpoint - 2026-09-08
+
+- Jordan explicitly authorized a local commit of the staged V1 timing/reporting
+  work and implemented review fixes on `feature/qabot-journeys-cli`, in
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`.
+  This checkpoint follows parent `13b9c50`; it does not integrate the branch into main.
+- Fresh pre-commit verification: all 179 selected journey tests passed in 162.43s,
+  including Chrome recording/playback and cleanup. Ruff passed for all 16 staged
+  Python files; the staged diff check passed. The staged source snapshot remained
+  unchanged throughout verification.
+- Test evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/commit-20260908/results.xml`.
+  Report artifacts remain local under the primary checkout's `v1/reports/`.
+- R2-04 state-precondition enforcement remains pending Jordan's policy choice.
+  Commit authorization does not authorize model-driven state verification or
+  imply this remaining finding is fixed. No push or Langflow commit is included.
+
+## Round Two Fixes And Worktree Relocation - 2026-09-08
+
+- Jordan authorized fixing all five round-two finding groups using GPT-5.5 and
+  requested project-local worktrees instead of direct /tmp worktrees.
+- Active implementation is now
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`,
+  branch `feature/qabot-journeys-cli`, HEAD `13b9c50` plus preserved uncommitted V1
+  work. Primary checkout remains on `main`, HEAD `a216e98`.
+- Moved the named Langflow worktree, without deleting its four staged changes, to
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/langflow-qabot-combined-20260906`.
+  It remains detached at `2046cd4`. Both old /private/tmp worktree paths are gone.
+  All 133 Quabity and 10,258 Langflow tracked/untracked file hashes and both Git
+  statuses matched after migration. Shared virtualenv symlinks were preserved;
+  Quabity's local editable import path was repaired and CLI help works.
+- `.worktrees/` is ignored in primary and feature checkouts. Create future linked
+  worktrees under the primary project's `.worktrees/`, not directly under /tmp.
+- GPT-5.5 ownership: runtime agent owns runner/tests for stable secret resolution
+  and teardown evidence; discovery agent owns setup/tests and minimal credential
+  helpers; approval agent owns immutable source binding/tests. State-precondition
+  policy clarification is pending (block unverifiable state vs model verification).
+  No state-verification engine is implicitly authorized.
+- Evidence and task ledger:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/round2-fixes-20260908/`.
+  Migration snapshots/patches are in its migration subdirectory. Historical report
+  and approval contents remain unchanged; active docs are being updated for the
+  new CLI path. Older Langflow validation fixtures are not being deleted/mutated.
+- Four finding groups are fixed and independently verified: stable credential
+  references/redaction, immutable approval identity, discovery/runtime credential
+  consistency, and completed findings retained across cleanup failure. Cross-review
+  also fixed same-root target symlink retargeting and empty credential overrides.
+  Discovery skips nested `.worktrees/` evidence. Historical approvals were not renewed.
+- Root final verification: 155 core tests plus 24 discovery tests passed (179 total),
+  including real Chrome video/playback and cleanup checks. Ruff and diff checks passed;
+  all 15 checked source/test hashes remained unchanged during verification.
+  Full results and migration details:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/round2-fixes-20260908/verification.md`.
+- R2-04 remains open: explicit state prerequisites are still ignored. Await Jordan's
+  choice before implementing state handling; recommend fail-closed BLOCKED for
+  unverifiable state in V1. Passing tests do not certify this known defect fixed.
+  Then rerun focused state tests and finish the five-group batch. No project commits,
+  remote writes, live provider runs, or new Langflow execution were performed.
+
+
+## Second Team Review - 2026-09-08
+
+- Jordan requested another GPT-5.5 review team after the five-fix batch. This is
+  review-only: runtime/approval safety, browser verdict integrity, and discovery/
+  CLI/reporting are independent scopes. Root will adjudicate reproducible findings
+  before recommending any further implementation.
+- Target remains `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50` plus the verified uncommitted V1 work.
+  A 72-file source/test/document hash snapshot protects the reviewed baseline.
+- Evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/team-review-20260908-round2/`.
+  No source/test edits, project commits, remote writes, or live provider/Langflow
+  runs are authorized for this review. Only review evidence and state notes change.
+- Review complete. Root prioritized five groups: secret aliases escaping the
+  redaction set; mutable HEAD/branch refs not bound to approved commits; discovery
+  credential rules both missing sensitive fields and rewriting safe configuration;
+  ignored explicit state preconditions; and completed findings lost on context
+  teardown failure. Full adjudication and retained reproductions:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/team-review-20260908-round2/review-summary.md`.
+- Root independently reproduced the full-run alias leak, checked the two-commit
+  approval-drift fixture, and confirmed discovery sanitization/alias behavior.
+  Two independent browser/lifecycle probes passed in 3.68s, intentionally asserting
+  the defects. All 72 source/test/document hashes remained unchanged. No broad
+  suite, live model calls, or fresh Langflow run was performed in this review.
+- Literal command scanning and transitive module hashing remain known limits,
+  not newly promoted findings. Cross-port error attribution needs an explicit
+  policy rather than an automatic change. Missing video can legitimately block;
+  the teardown defect is erased findings, not a blanket requirement for exit 1.
+- Next recommendation: fix credential handling and immutable approval identity,
+  then define supported state-precondition proof/blocking and preserve completed
+  evidence across teardown. No further implementation is authorized yet.
+
+
+## Approved Review Fixes - 2026-09-08
+
+- Jordan authorized the five prioritized fixes and requested GPT-5.5 implementers.
+  Three agents own disjoint walker, runner, and listener-ownership files. Scope:
+  literal credential preflight, failed-action blocking, owned startup readiness,
+  exact setting comparisons, and retained redacted setup/reset diagnostics.
+- Active implementation remains `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50` plus existing uncommitted V1 work.
+  The primary checkout is on `main`, HEAD `a216e98`; no source integration there.
+- Plan:
+  `/private/tmp/qabot-cli-2026-09-06/docs/superpowers/plans/2026-09-08-v1-review-fixes.md`.
+  Tests and review evidence stay under
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/v1-review-fixes-20260908/`.
+- All five fixes are implemented. Root's combined runner/walker/ownership suite
+  passed 113 tests in 147.44s, including real Chrome video playback and process
+  cleanup. Six source/test hashes stayed unchanged throughout verification; Ruff
+  and git diff --check passed. An independent GPT-5.5 final review found no
+  blockers in the approved scope. An additional 171-case redaction boundary sweep
+  and two full-run foreign-listener acceptance probes passed.
+- Literal credential-bearing URLs, malformed credential authorities, no-reset
+  per-journey ownership checks, and setup/reset capture-failure handling were
+  corrected during review. Common configuration knobs and file paths remain
+  allowed. README, PRD implementation notes, and walkthrough describe the checks.
+- Verification summary:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/v1-review-fixes-20260908/verification.md`.
+- Residual follow-up: startup-log capture errors still need explicit report
+  handling; setup/reset capture errors are handled. General secret scanning and
+  pixel redaction are not implemented. Other review findings and V2 learning/replay
+  remain deferred. No fresh Langflow/provider runs or project commits/remote writes.
+- Next: Jordan completes the first-use manual walkthrough, then validate a paired
+  known-broken/known-fixed application with unchanged assertions. Integration of
+  this feature worktree into main awaits explicit commit/integration authorization.
+
+Last assessed: 2026-09-08.
+Directory: `/private/tmp/qabot-cli-2026-09-06`.
+Branch: `feature/qabot-journeys-cli`. Current HEAD: `13b9c50` plus uncommitted V1 changes.
+Incoming main revision: `ce0cede56e80f524d677ddf1b7de89eca4464f88`.
+Original workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
 Initial code/test assessment was performed at `ccc3698` with the existing working tree.
 
 ## Authorized Implementation Worktree
@@ -10,8 +138,8 @@ Initial code/test assessment was performed at `ccc3698` with the existing workin
 Jordan subsequently authorized building the local CLI and iterating with a team
 until real browser/video examples work. Implementation, the updated PRD, and full
 current build status are at `/private/tmp/qabot-cli-2026-09-06`, branch
-`feature/qabot-journeys-cli`. This original workspace's earlier code/docs edits are
-preserved; this section is a handoff pointer, not a replacement of that history.
+`feature/qabot-journeys-cli`. The following handoff links from main are retained
+alongside the implementation and review history in this document.
 
 - Current implementation state: `/private/tmp/qabot-cli-2026-09-06/qabot_current_state.md`.
 - Manual walkthrough: `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`.
@@ -22,17 +150,21 @@ preserved; this section is a handoff pointer, not a replacement of that history.
 - PR14931 browser FAIL (missing policy explanation): `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/langflow-diagnostic-run1/report.html`.
 
 The packaged CLI discovers/reviews startup plans, starts local applications, records
-real Chrome journeys, and writes local HTML/JSON/Markdown evidence. Headed Chrome
-and recording permissions work. Final code suite: 649 passed, 1 legacy live-model
-test deselected; both editor and Assistant videos were independently verified.
-The walkthrough is ready; production acceptance remains separate. A direct
-manual shop is running at `http://127.0.0.1:7888/ui` for this session. No commits,
-pushes, publication, or ticket changes were made.
+real Chrome journeys, and writes local HTML/JSON/Markdown evidence. The September 6
+validation recorded 649 passed tests, 1 legacy live-model test deselected, and
+independently verified editor and Assistant videos. The walkthrough is ready;
+production acceptance remains separate. The prepared manual shop used
+`http://127.0.0.1:7888/ui`; its current availability was not rechecked during this
+documentation merge. Later review fixes and verification are recorded below.
 
 ## Current Objective
 
-Produce a production-grade product requirements document (PRD). Jordan confirmed
-the following product scope on 2026-09-06:
+The overarching objective is a production-grade PRD, informed by the implemented
+local CLI and real browser/video walkthrough. The current task is to resolve the
+documentation conflicts from main and commit the merge, preserving the pilot
+requirements, evidence, and review fixes.
+
+Jordan confirmed the following product scope on 2026-09-06:
 
 For developers reviewing a code change, qabot generates understandable QA journeys,
 lets a human correct their expected outcomes, executes them against a controlled
@@ -40,7 +172,7 @@ test environment, and reports evidence plus anything it could not verify.
 
 Anonymous scanning and automatic merge blocking are outside the first release.
 The PRD draft is at
-[/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/PRD.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/PRD.md).
+[/private/tmp/qabot-cli-2026-09-06/docs/PRD.md](/private/tmp/qabot-cli-2026-09-06/docs/PRD.md).
 Product direction and local CLI delivery are confirmed. Jordan will evaluate CLI
 usability before pursuing a local web interface. The PRD now proposes an end-to-end
 CLI acceptance path: generate, review/edit, run a selected journey, inspect evidence,
@@ -61,7 +193,7 @@ setup blocks the affected tests with a concrete missing requirement.
 The PRD now includes startup discovery, reviewed execution, and setup lifecycle
 requirements FR-15 through FR-17, with AC-11 and AC-12. AC-08 includes Jordan's
 review of the startup plan and qabot-managed startup. D-02 is resolved; the set
-of supported local setups remains D-04.
+of supported local setups was subsequently accepted under D-04 for the pilot.
 
 Jordan confirmed D-03: explicit approval once per startup-plan/journey version,
 unchanged reruns without another prompt, and renewed review after execution-affecting
@@ -72,11 +204,11 @@ approval reuse and stale-approval rejection. Application revision and approved
 procedure identity remain separate so the same journey can compare broken/fixed
 builds; changed executable setup inputs still require renewed review.
 
-The next question, D-04, is pending. Recommendation, not accepted: macOS and Chromium,
+D-04 was accepted by the subsequent build instruction: macOS and Chrome/Chromium,
 local Git repo with base/head revisions and optional change description, validated
-on Langflow plus one unrelated web app. Alternatives are Langflow-only initially
-or supporting macOS and Linux from the first release. Exact supported local setup
-types must also be defined once the release scope is selected.
+on Langflow plus the bundled shop. Setup uses reviewed local commands, existing
+host tools, supplied secrets, and readiness checks. This pilot scope does not
+establish general infrastructure provisioning or cross-platform support.
 
 Supplied environment variables must be distinguished from effective runtime
 configuration; source, verification status, and unknown values matter. A readiness
@@ -197,15 +329,54 @@ accuracy remain unverified. No application code changes were required.
 
 ## Working Tree and Next Steps
 
-Current HEAD is `df7d2d4` (`docs`), a commit made outside this agent's actions.
-The PRD and state file have unstaged edits; Spec Kit and agent configuration are
-untracked. Preserve that work. No staging or commits were performed by this agent.
-Spec Kit's constitution remains an unfilled template; no feature spec/plan/tasks
-set was found. The PRD draft was created after the scope confirmation. Local run
-evidence is gitignored.
+### Active Build: 2026-09-06
 
-1. Resolve D-04: supported platforms, change inputs, target applications, and local
-   setup types; the clarification is pending.
+Jordan authorized implementation and a team, with real browser/video validation of Langflow PRs 14931 and 14913, including the Assistant creation/build route. The implementation is isolated at `/private/tmp/qabot-cli-2026-09-06`, branch `feature/qabot-journeys-cli`; original workspace edits remain untouched. No commits or remote writes are authorized.
+
+Plan: `/private/tmp/qabot-cli-2026-09-06/docs/superpowers/plans/2026-09-06-journeys-cli.md`.
+
+- Accepted initial scope: local CLI, macOS/Chrome, local git base/head and optional change description; Langflow plus an unrelated local application.
+- Real headed Google Chrome interaction and video recording passed. Full baseline: 569 passed, 1 live-model test deselected.
+- Existing local Langflow `.env` provides required credentials. OpenAI authentication passed but inference later failed for exhausted quota; real Assistant tests use the existing funded Watsonx provider instead. Claude CLI JSON completion passed after the 12:40pm quota reset.
+- Foundation agent owns plan discovery and approval. Root owns browser runner, reports, and CLI. Setup agent owns isolated Langflow prerequisites.
+- PR14931 deliberately expects a rejected build with a policy diagnostic, not a successful restricted custom-component build. Added an explicit expected-error step flag.
+- Proposed execution exit contract implemented for validation: 0 all PASS, 1 any FAIL, 2 BLOCKED without FAIL; invalid or stale approval prevents launch. These are implementation decisions, not yet release acceptance evidence.
+- Five browser regressions pass: expected error, unexpected error, ambiguous controls, partial model-failure evidence, unknown required settings.
+- Next: complete startup/report integration, validate both real PR routes and unrelated app, iterate on invalid results, update PRD with evidence and remaining release gaps.
+
+### Live Validation and Corrections
+
+- Packaged commands now exist: `qabot journeys plan`, `approve`, and `run`. Runs create new HTML/JSON/Markdown artifacts, real Chrome videos and screenshots, retain partial browser/model failures, and clean their owned application process group. `--env-file` imports only names explicitly required by the reviewed plan and cannot override its nonsecret feature flags.
+- Independent review found and fixed stale script approval with adjacent shell punctuation, missing MDX/current product documentation, secret-bearing command arguments, secret precondition leakage, delayed browser errors, cross-origin navigation/input exposure, and discarded partial actions. Root added strict structured model responses, keyboard activation, and named-container locator scoping. Focused verification at this checkpoint: 33 tests passed, plus setup tests owned by the discovery reviewer.
+- Live discovery first timed out and then omitted important routes; those artifacts were preserved. Relevance-selected semantic excerpts and explicit browser-only authoring produced `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/langflow-20260906/discovered-plan-v3.json`, which discovers both editor and Assistant routes. It still requires review: supplied startup flags and genuine model-success expectations needed correction. Human review remains a real boundary, not a cosmetic label.
+- Real model provider is authenticated Claude CLI/Sonnet using structured JSON, no tools, no MCP configuration, no session persistence, and safe mode. OpenAI credential authentication succeeded but inference quota failed. The existing Watsonx credential successfully powered the exact fixed Langflow Assistant and a three-node Agent flow. Credential values remain outside plans/reports.
+- Exact fixed target: `/private/tmp/langflow-qabot-release-d14`, detached `d14dec904fc55c5e79cfeb8dec2bdf449e638f9d`, containing both PR fixes. Runtime scripts/seed data live at `/private/tmp/langflow-qabot-release-d14-runtime`; setup notes are in its `README.md`. No patches to this fixed target's tracked source.
+- PR14931 has a real residual browser-path defect: the legacy build SSE includes the policy Note, but the canvas AG-UI route terminates on the early short error. The browser showed only No model selected and a disabled output inspector. Keep the original expectation and report a browser FAIL if the recorded CLI run confirms this; do not change Langflow or weaken the test to claim the PR works in the browser.
+- Local Langflow tracing attempted requests that were rejected with 403. Subsequent reviewed startup explicitly sets `LANGFLOW_DEACTIVATE_TRACING=true`, the authoritative application switch, plus SDK tracing false flags and DO_NOT_TRACK. This behavior is not covered up as offline operation.
+- Unrelated shop validation: real CLI Run2 passed widget/cart and valid checkout; Run5 correctly failed the expired-card case with a verified playable 46.72-second video. `/private/tmp/qabot-cli-2026-09-06/examples/shop/live-validation-report.md` records every iteration and remaining discovery/step-classification gaps.
+- Recorded diagnostic run is complete: `qa-artifacts/langflow-diagnostic-run1/report.html` is a valid browser FAIL, with a decoded 104.48-second video. The expected policy explanation remains absent on the fixed revision.
+- Final full regression after execution/security, bounded-keyboard and literal-input fixes: 649 passed, 1 live-model test deselected in 139.77 seconds. Independent review added reflected/encoded credential coverage in model inputs, reports and startup logs, masked credential inputs, shell working-directory approval bypasses, cancellation with partial evidence and exit 130, and owned-process-group cleanup. Ruff checks pass on edited Python files; `git diff --check` passes. Actual Claude/Watsonx runs are separate from the deselected legacy live-model test.
+- Credential text is redacted before model evaluation and report serialization. Credential-named references are refused in non-password inputs. This is not general screenshot/video pixel redaction: an application that reflects secrets visibly can still expose them in visual evidence. Do not use sensitive production data in this pilot.
+- Real Assistant generation exceeded the original six-action loop while still running. Added a bounded observable browser wait (visible, hidden, or enabled; default 30 seconds, maximum 60 seconds) with real Chrome tests; generation is not reported as successful merely because it was submitted.
+- Editor `qa-artifacts/langflow-editor-20260906-final3` PASS: all 13 steps, three nodes, both correct edges, IBM model binding, exact full submitted input, and real `qabot editor flow works` response (932 tokens/3.8s). Root decoded its 249.88-second Chrome video and inspected canvas, final response and mobile report; independent review confirmed action/report/screenshot agreement. Earlier final2 omitted an input prefix; it is preserved as regression history, corrected by literal-input guidance and an explicit expected-input check. Port 7865 is stopped.
+- Assistant CLI run `qa-artifacts/langflow-assistant-20260906-1343` passed all seven steps on d14. Root inspected the real Playground screenshot (WATSONX VERIFIED, 302 tokens, 2.7 seconds) and decoded its 171.36-second video in Chrome. Same-database run `qa-artifacts/langflow-assistant-20260906-1348-repeat` also passes: dashboard New Flow creates a distinct flow, final response 387 tokens/3.1 seconds. Root independently inspected its final screenshot; agent decoded its 155.32-second video. Original flow remains unchanged. Port 7864 is stopped.
+- Target `uv.lock` became dirty during validation; it is preserved, not reverted. Root confirms it is the only tracked target diff, with no application source changes. Repeat evidence records the dirty-state limitation; the HEAD alone does not attest installed dependencies. Assistant PASS retains expected auto-login403/completed-stream-abort QUESTION evidence, not an error-free-network claim.
+- Real shop discovery v3 finds UI routes but incorrectly makes known defects expected success. A focused intended-behavior instruction and prompt regression (15 setup tests passed) corrected live v4's expired-card oracle. Startup remains unresolved in scoped evidence and requires review; discovery is not autonomously release-ready.
+- Fresh complete shop run `qa-artifacts/shop-20260906-final`: PASS/PASS/FAIL, exit 1. Both expired-card observations FAILED correctly. Root decoded all three videos (29.24/35.56/50.76 seconds), inspected the action trace and mobile report; independent evidence review found no material false verdict. The judge's incidental mention of declined describes the reset response form, not the actually submitted expired card.
+- Prepared a separate direct-interaction shop at `http://127.0.0.1:7888/ui`, PID 65419 for this session, isolated from CLI test port 7880. Log: `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/manual-shop-server.log`. This local demo is intentionally left running for Jordan's walkthrough; test-owned Langflow processes are stopped after their runs.
+- Editor investigation proved two issues with the reviewed navigation: Fit view leaves its menu open and hides canvas roles until Escape; sidebar additions overlap at 10px offsets. Manual UI verification proves select Enter then twenty Shift+Arrow presses moves a node exactly 400px and Enter on the two handle pairs creates two edges. Bounded repeated arrow-key support is implemented and tested (maximum 30, never repeated submission keys); final recorded replay verifies the complete flow.
+- Qabot lockfile normalization is from the installed uv version dropping upload-time metadata. Structured comparison confirms the only added package version is python-dotenv 1.2.3 and no existing package versions were removed/upgraded.
+- The worktree's untracked `.venv` is a symlink to the original environment, synchronized with dev/browser/llm extras; the editable install points here. Run walkthrough commands from this worktree. Do not stage the `.venv` symlink in any later commit. Original source edits remain preserved; only its state-file handoff pointer was added by this build.
+- Build handoff is ready: `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md` includes exact commands, videos, repeat instructions and known boundaries. All four example approvals validate; all test-owned app ports are stopped. Only the separate manual shop on 7888 remains running intentionally. Next: Jordan performs the walkthrough and adjudicates the PR14931 browser failure; resolve PRD release gates, including generic action fidelity, configuration/dependency attestation, independent approvals, and accuracy/cost/retention ownership. Do not call the pilot production-certified.
+
+Historical discovery checkpoint: HEAD was `df7d2d4` (`docs`), with unstaged PRD/state
+edits and untracked Spec Kit/agent configuration. No staging or commits were
+performed during that discovery session. Spec Kit's constitution was an unfilled
+template; no feature spec/plan/tasks set was found. The PRD draft was created after
+the scope confirmation. Local run evidence is gitignored.
+
+1. D-04 initial pilot scope is accepted; validate its local CLI, Chrome, repository,
+   and reviewed startup boundaries against the walkthrough.
 2. Resolve D-05: detailed outcome/partial-run semantics and CLI exit behavior.
 3. Complete the PRD's requirement IDs, priorities, testable acceptance criteria,
    failure states, nonfunctional requirements, rollout gates, and evidence links
@@ -214,7 +385,188 @@ evidence is gitignored.
    the PRD production-grade. Keep prototype capabilities and release requirements
    explicitly distinguished.
 
-Session changes: the PRD draft and this state file, renamed from
+Earlier discovery-session changes: the PRD draft and this state file, renamed from
 `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/project_current_state.md`
-to match Jordan's updated naming instruction. No application code changes, commits,
-pushes, publishing, messages to others, or changes to external systems.
+to match Jordan's updated naming instruction. The subsequent authorized build adds
+application code and tests only in the isolated worktree above. No commits, pushes,
+publishing, messages to others, or ticket changes were performed.
+
+## PR #2 Review Checkpoint - 2026-09-06
+
+- User requested an independent GPT-5.5 review and a manual walkthrough checklist,
+  not implementation changes or a published GitHub review.
+- Reviewed directory: `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, head `8ab39ec17bebfec65790ce5896eba26bdd94260a`,
+  PR base `ce0cede56e80f524d677ddf1b7de89eca4464f88`. This supersedes the older
+  pre-commit HEAD/status notes above for this review checkpoint.
+- GPT-5.5 findings, checked by root: direct extensionless `sh scripts/setup`
+  references are omitted from approval script identities, so changing their
+  executable contents does not invalidate approval; `.venv` is now tracked as an
+  absolute machine-local symlink; new journey browser tests lack browser-tier
+  markers and import Playwright unconditionally through shared test helpers.
+- Dropped a proposed symbolic-HEAD approval finding after checking PRD section 4:
+  another application revision may reuse an unchanged reviewed procedure/profile,
+  and the runner records the actual source SHA. Package-manager script indirection
+  remains an explicitly documented release gap, distinct from the direct-script bug.
+- Fresh verification: the six journey test modules passed all 80 tests in 88.72s,
+  including real Chrome video playback and cleanup. Non-browser collection still
+  selects all 47 runner/walker tests, confirming the tier regression. All four
+  example approvals validate, existing report videos remain present, and the
+  separate manual shop at `http://127.0.0.1:7888/ui` returned HTTP 200.
+- No live Claude/Watsonx or Langflow end-to-end reruns were performed during this
+  review. Earlier recorded results remain historical evidence, not fresh runs.
+- Recommended manual order: shop review/approve/run and PASS/PASS/FAIL evidence;
+  stale-plan/script, missing-env, occupied-port and cancellation guardrails;
+  Langflow editor and Assistant creation with exact inputs and completed real
+  inference; PR14931 browser diagnostic FAIL adjudication; fresh discovery and
+  configuration/source-evidence review; clean-checkout installation and rerun.
+- Next: fix the three substantiated review findings before merge, then Jordan
+  performs `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`. Resolve
+  production PRD decisions D-05 through D-08 separately. Only this state document
+  was edited during review; no code fixes, commits, pushes or remote comments.
+
+## PR #2 Review Fixes - 2026-09-07
+
+- User authorized fixing all three substantiated review findings. Work remains in
+  `/private/tmp/qabot-cli-2026-09-06`, branch `feature/qabot-journeys-cli`, based on
+  `8ab39ec17bebfec65790ce5896eba26bdd94260a`. Prior review notes are preserved above.
+- Approval now hashes path-like extensionless script references, including
+  relative and absolute paths in startup, setup and reset commands. Nested shell
+  command strings are expanded before scanning so they are not mistaken for a
+  single filename. Changed scripts invalidate approval; missing referenced paths
+  fail before approval. Package-manager indirection remains outside this fix.
+- Removed `.venv` from the Git index with `git rm --cached`; the local environment
+  and symlink remain intact. `.gitignore` now ignores `.venv` whether it is a
+  directory, file or symlink. Only this removal is staged; no commit was made.
+- Browser-dependent runner/walker tests now carry the browser marker and import
+  Playwright lazily. Pure configuration, approval and redaction tests remain in
+  the non-browser tier. The missing-credential test no longer requests an unused
+  port fixture before its pre-startup failure.
+- Added approval regressions covering startup/setup/reset, relative/absolute and
+  nested shell references, plus missing scripts. Added
+  `/private/tmp/qabot-cli-2026-09-06/tests/test_journey_test_tiers.py`, which runs the
+  non-browser runner/walker tests in a subprocess with Playwright unavailable and
+  third-party pytest plugin autoload disabled. Regressions failed before fixes.
+- Final verification: 33 non-browser tests passed (38 deselected) in 0.74s;
+  38 real Chrome tests passed (9 deselected) in 84.20s. Ruff passed on all edited
+  Python files. Git confirms `.venv` is ignored and absent from the index.
+- GPT-5.5 independently reviewed the fix diff with no findings and passed the
+  24 approval/tier-guard tests. No live Langflow/provider reruns were performed.
+- Next: Jordan reviews the local changes and performs the documented manual
+  walkthrough. The new tier regression file is untracked and must be included
+  with the source changes in any later user-authorized commit. No commits, pushes
+  or remote review comments were made by this fix session.
+
+## Main Merge Resolution - 2026-09-07
+
+- Jordan requested conflict resolution and a local merge commit. The in-progress
+  merge combines feature head `a4df6a6` with main revision
+  `ce0cede56e80f524d677ddf1b7de89eca4464f88`; no newer revision was substituted.
+- Conflicts were limited to `/private/tmp/qabot-cli-2026-09-06/docs/PRD.md` and
+  `/private/tmp/qabot-cli-2026-09-06/qabot_current_state.md`. Kept the accepted D-04
+  pilot scope, implementation evidence, remaining release gates, and PR #2 review
+  and fix history. Preserved main's handoff links and labeled older status claims
+  as historical rather than reverting the project to its pre-build state.
+- The prior fixes are already committed in `a4df6a6`, including the tier regression
+  file and `.venv` tracking removal. Earlier unstaged/untracked notes describe the
+  prior session, not the current merge state.
+- No application code, dependencies or tests changed during resolution. Validation
+  is scoped to conflict-marker, whitespace, and staged-diff checks; application
+  tests and live model/browser scenarios were not rerun for this docs-only merge.
+- Next: complete the authorized local merge commit, then continue Jordan's manual
+  walkthrough and PRD decisions D-05 through D-08. No push or publication is authorized.
+
+## Performance Discussion - 2026-09-07 (Proposed, Not Approved)
+
+- Jordan found the PR14931 failure's video/photo evidence useful, but questioned
+  the roughly 1:45 video for four steps. Suggested learning reusable setup workflows
+  such as login, possibly with a background agent, and asked about v1 versus v2.
+- Inspection of the retained diagnostic results found eight browser actions. The
+  current loop implies twelve actor decisions (including four done decisions) and
+  four judge calls, each using a separate Claude CLI invocation. Generic network
+  idle/text-stability waits also follow each action, including form fills. There
+  are no per-action/model-call timings to attribute the actual elapsed time.
+- Recommendation for discussion: v1 timing breakdown and condition-specific waits
+  while preserving delayed-error capture; a bounded follow-up for explicit,
+  reviewed setup recipes replayed without per-action model calls; v2 automatic
+  cross-journey pattern discovery and recipe maintenance. No implementation or
+  release-scope change was authorized in this discussion.
+- Reuse procedures, not verdicts: validate role/profile and page preconditions,
+  parameterize secret references, require fresh postconditions/evidence, and stop
+  visibly on divergence rather than silently repairing or repeating side effects.
+  Authentication-state reuse is distinct from replaying login and cannot stand in
+  for testing login itself. Candidate recipes may come from verified setup steps
+  even when the later application assertion correctly fails.
+
+## V1 Performance Validation - 2026-09-07 (In Progress)
+
+- Jordan approved v1 timing, bounded readiness improvements, and durable report
+  storage, with workflow replay, authentication reuse, and automatic learning
+  deferred. This supersedes the proposed/not-approved status above.
+- Application changes remain in `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`. Deferred design is in
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v2/`, in the
+  primary checkout on branch `main`, as explicitly requested. No commit or push.
+- New run output defaults to the primary Git workspace's `v1/reports/` directory,
+  even when invoked from the linked implementation worktree. Reports contain
+  optional measured phase timings, model call counts, approximate video chapters,
+  and bundle-relative media links. No synthetic timings are added to old runs.
+- Retained evidence is at
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/`.
+  All 1,306 original copied files were hash-verified. The 26 historical report
+  bundles now have portable regenerated views and `.original` JSON/HTML/Markdown
+  backups; video and screenshot bytes are unchanged. The migration manifest
+  describes original copy hashes, not hashes of regenerated report views.
+- Fresh focused verification: 70 CLI/report/runner/walker tests passed in 104.93s,
+  including Chrome playback and chapter seeking. Ruff passed for the eight edited
+  application/test Python files. GPT-5.5 reviewed both timing/readiness and
+  report/CLI scopes with no findings; its separate checks passed 51 walker tests
+  and 14 non-browser CLI/report/runner tests.
+- Jordan requested a fresh diagnostic run followed by first-use walkthrough
+  instructions. GPT-5.5's initial launch correctly stopped with exit 2: the old
+  approval had no launcher hash and is stale under the extensionless-script fix.
+  No browser verdict or timing was produced by that attempt. Root inspected the
+  standard launcher wrapper and unchanged plan. Next is an explicitly labeled
+  agent re-review of an unchanged durable plan copy, preserving the old approval.
+- The walkthrough now starts with fresh discovery, records review corrections,
+  checks editor and Assistant coverage, and uses durable report destinations.
+  Prepared Langflow prerequisites remain a disclosed limitation of this first-use
+  evaluation; a clean-machine install has not been validated.
+
+## Fresh Diagnostic Evidence - 2026-09-07
+
+- Fresh report:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/20260907T160319Z-diagnostic-plan-dcd7ab11/report.html`.
+  The unchanged four-step diagnostic on exact Langflow revision
+  `d14dec904fc55c5e79cfeb8dec2bdf449e638f9d` reports three held steps and one
+  failed expectation; the CLI exited 1. Root independently inspected its final screenshot: only
+  the generic missing-model error is visible, not the required policy explanation.
+  The final action trace contains one Run component click and one notification
+  inspection, not a retry or fixture repair.
+- The plan was copied byte-for-byte to durable storage and explicitly re-reviewed
+  as an agent review, not human confirmation. The old approval is preserved. The
+  default run destination correctly resolved the primary checkout from the linked
+  worktree; original example plan and approval were not modified.
+- Measured step total: 81.414s. Actor calls: 44.521s across 12 calls. Judge calls:
+  24.612s across 4 calls. Browser actions: 1.224s. Readiness/explicit waits: 8.653s.
+  Evidence/driver overhead: 2.396s. Full recorded run timestamps span 113.602s,
+  including startup and teardown outside measured steps. Model calls account for
+  approximately 85% of measured step time, not provider-internal reasoning time.
+- Root independently decoded the 1440x1000, 87.32s video in Chrome, checked four
+  chapter links and final chapter seeking to approximately 60.70s, verified 13
+  bundle-relative media references, and inspected desktop/mobile screenshots.
+  Report layout fits 390px mobile width. Review screenshots are retained in the
+  run's `independent-review/` directory. GPT-5.5 also confirmed nonblank decoded
+  frames at five positions spanning the recording and retained `validation.md`.
+  A single shorter recording than the old
+  104.48s video does not establish a repeatable performance improvement.
+- Port 7862 is free after execution. The target still has only its known modified
+  `uv.lock`; no target application source was changed. All 1,306 historical
+  original files were rechecked against the migration manifest after portable-view
+  regeneration, resolving original view hashes against `.original` backups.
+- Next: Jordan follows First-Use Validation and section 6 of
+  `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`, recording discovery
+  corrections, missing setup information, editor/Assistant coverage, independent
+  evidence judgments, and unchanged-plan rerun behavior. Do not treat the prepared
+  runtime walkthrough as proof of clean-machine installation or generic state
+  attestation. No commits, pushes, or remote publication were performed.
