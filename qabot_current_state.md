@@ -1,5 +1,21 @@
 # qabot Current State
 
+## Main Integration And State Resolution - 2026-09-08
+
+- Jordan merged PR #2 and pulled main. Current directory:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`, branch
+  `main`, HEAD `64629ae`. The V1 implementation and review fixes from `2a97a2d`
+  are now integrated into main.
+- Resolved the state-file conflict between the pulled history and local stashed
+  notes by retaining both histories. Earlier workspace, uncommitted-work, and
+  integration-status statements below describe their dated checkpoints, not the
+  current checkout.
+- R2-04 state-precondition enforcement remains pending Jordan's policy choice.
+  The last implementation verification remains 179 passing tests; this docs-only
+  resolution does not constitute a new application test run.
+- Only this file is resolved and staged. No new commit, push, application change,
+  or Langflow worktree change is part of this resolution.
+
 ## Local Commit Checkpoint - 2026-09-08
 
 - Jordan explicitly authorized a local commit of the staged V1 timing/reporting
@@ -16,6 +32,22 @@
 - R2-04 state-precondition enforcement remains pending Jordan's policy choice.
   Commit authorization does not authorize model-driven state verification or
   imply this remaining finding is fixed. No push or Langflow commit is included.
+
+## Local Commit Created - 2026-09-08
+
+- Jordan authorized the commit. Created `2a97a2d0b911808a12ae9705410564f063ec9c3e`
+  (`fix: harden journey execution and retain review evidence`) on
+  `feature/qabot-journeys-cli`, in
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`.
+  The feature worktree is clean and one commit ahead of its local remote-tracking ref.
+  Nothing was pushed or integrated into main; Langflow's four staged changes remain intact.
+- Fresh pre-commit verification: 179 journey tests passed in 162.43s, including
+  Chrome recording/playback. Ruff passed on all 16 staged Python files and the
+  staged diff check passed. Evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/commit-20260908/results.xml`.
+- R2-04 state-precondition enforcement is still pending Jordan's policy choice;
+  the commit does not claim all five round-two findings are resolved. Primary main
+  checkout changes remain uncommitted; this note records the feature-branch checkpoint.
 
 ## Round Two Fixes And Worktree Relocation - 2026-09-08
 
@@ -127,10 +159,8 @@
   this feature worktree into main awaits explicit commit/integration authorization.
 
 Last assessed: 2026-09-08.
-Directory: `/private/tmp/qabot-cli-2026-09-06`.
-Branch: `feature/qabot-journeys-cli`. Current HEAD: `13b9c50` plus uncommitted V1 changes.
-Incoming main revision: `ce0cede56e80f524d677ddf1b7de89eca4464f88`.
-Original workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
+Directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`.
+Branch: `main`. Current HEAD: `64629ae`. CLI implementation is now merged into main.
 Initial code/test assessment was performed at `ccc3698` with the existing working tree.
 
 ## Authorized Implementation Worktree
@@ -570,3 +600,61 @@ publishing, messages to others, or ticket changes were performed.
   evidence judgments, and unchanged-plan rerun behavior. Do not treat the prepared
   runtime walkthrough as proof of clean-machine installation or generic state
   attestation. No commits, pushes, or remote publication were performed.
+## Return-to-Project Checkpoint - 2026-09-07
+
+This checkpoint supersedes the earlier workspace and next-step status above;
+historical assessments remain preserved.
+
+- Primary directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`,
+  branch `main`, local HEAD `a216e98` (Add v2). V2 proposals are committed here.
+  The CLI feature commits and latest uncommitted v1 improvements are not on main.
+- Implementation directory: `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50`. Timing, readiness, portable reports,
+  default durable output, related tests, and updated PRD/walkthrough remain
+  uncommitted. Its `qabot_current_state.md` contains the detailed validation history.
+- Latest recorded verification: 70 focused tests passed; GPT-5.5 found no issues
+  in the reviewed timing/readiness and report/CLI scopes. No tests were rerun for
+  this status check.
+- Fresh live diagnostic correctly returned FAIL for the missing browser policy
+  explanation. Video: 87.32s; measured steps: 81.41s, including 69.13s model calls.
+  Report and media remain under
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/20260907T160319Z-diagnostic-plan-dcd7ab11/`.
+- Historical Langflow editor and Assistant runs demonstrated completed browser
+  construction and real inference. These are pilot evidence, not certification of
+  generic discovery, configuration attestation, or production readiness.
+- Next validation: Jordan follows First-Use Validation and section 6 of
+  `/private/tmp/qabot-cli-2026-09-06/examples/WALKTHROUGH.md`, generating a fresh
+  plan and recording setup interventions, substantive corrections, missing route
+  coverage, evidence disagreements, and unchanged-plan rerun behavior.
+- Remaining work: review and integrate the feature changes after explicit commit
+  authorization; validate a known-broken/known-fixed pair with identical assertions;
+  resolve outcome, data-handling, quality-threshold, and release-ownership decisions
+  in the feature worktree's PRD. Workflow learning remains deferred to V2.
+- This status check changed only this state document. No code changes, commits,
+  remote writes, live model calls, or additional application runs were performed.
+
+## Implementation Team Review - 2026-09-07
+
+- Jordan requested GPT-5.5 reviewers and GPT-6 evaluation, with impactful findings
+  surfaced before implementation. Three GPT-5.5 reviews covered verdicts, runtime
+  safety, and CLI/report experience. GPT-6 Astra adjudicated all 11 candidates.
+- Target remains `/private/tmp/qabot-cli-2026-09-06`, branch
+  `feature/qabot-journeys-cli`, HEAD `13b9c50` plus uncommitted V1 changes. No
+  implementation/test/document changes were made in that worktree during review;
+  22 source/test/document hashes were verified unchanged.
+- Root independently reproduced failed-action PASS with JourneyBrowserDriver,
+  literal credential persistence, acceptance of an unowned late-healthy service,
+  incorrect case-insensitive setting comparison, stale source-status attribution
+  after setup mutation, and discarded setup diagnostics. These are isolated
+  synthetic checks, not additional live Langflow/provider runs.
+- Recommended first fixes: protect credential persistence paths; block unresolved
+  failed browser actions; verify endpoint ownership; compare settings exactly;
+  retain redacted setup/reset output. These are recommendations, not authorization
+  to modify the implementation. Outcome summaries, discovery provenance, source
+  lifecycle identity, and portable onboarding remain relevant follow-up work.
+- Existing tests still passed in overlapping reviewer scopes (100, 70, and 14),
+  demonstrating gaps in coverage rather than absence of the reproduced defects.
+- Detailed assessment and retained repro evidence:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/team-review-20260907/review-summary.md`.
+- Next: Jordan reviews the prioritized findings and chooses whether to authorize
+  fixes before external alpha use. No project commits or remote actions occurred.
