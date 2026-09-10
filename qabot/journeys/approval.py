@@ -122,6 +122,7 @@ def _script_tokens(command: str) -> list[str]:
     except ValueError as exc:
         raise ApprovalError(f"could not parse reviewed command {command!r}: {exc}") from exc
     command_position = True
+    mkdir_operands = _mkdir_operand_indexes(tokens)
     for index, token in enumerate(tokens):
         if command_position and token in {"cd", "pushd", "popd"}:
             raise ApprovalError(
@@ -140,6 +141,8 @@ def _script_tokens(command: str) -> list[str]:
             command_position = False
     expanded: list[str] = []
     for index, token in enumerate(tokens):
+        if index in mkdir_operands:
+            continue
         if index and tokens[index - 1] in {"-c", "-lc", "-ec"}:
             expanded.extend(_script_tokens(token))
             continue
@@ -152,6 +155,34 @@ def _script_tokens(command: str) -> list[str]:
             except ValueError:
                 pass
     return expanded
+
+
+def _mkdir_operand_indexes(tokens: list[str]) -> set[int]:
+    skip: set[int] = set()
+    command_position = True
+    in_mkdir = False
+    for index, token in enumerate(tokens):
+        if token and all(char in ";&|()\n" for char in token):
+            command_position = True
+            in_mkdir = False
+            continue
+        if command_position and (
+            "=" in token
+            or token in {"command", "builtin", "exec", "env", "if", "then", "else", "do", "!"}
+        ):
+            continue
+        if command_position:
+            in_mkdir = Path(token).name == "mkdir"
+            command_position = False
+            continue
+        if not in_mkdir:
+            continue
+        if token == "--":
+            continue
+        if token.startswith("-"):
+            continue
+        skip.add(index)
+    return skip
 
 
 def _looks_like_script(token: str) -> bool:

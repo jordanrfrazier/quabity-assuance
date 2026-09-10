@@ -7,6 +7,8 @@ from pathlib import Path
 from uuid import uuid4
 
 from qabot.journeys.approval import ApprovalError, approve_plan
+from qabot.journeys.bundle import BundleError, bundle_run
+from qabot.journeys.doctor import command as doctor_command
 from qabot.journeys.llm import journey_provider
 from qabot.journeys.runner import run_plan
 from qabot.journeys.setup import DiscoveryError, discover_plan
@@ -51,6 +53,16 @@ def command(args):
         if args.journey_command == "approve":
             print(f"Approval: {approve_plan(Path(args.plan), args.reviewer)}")
             return 0
+        if args.journey_command == "bundle":
+            print(
+                "Warning: journey metadata, screenshots, and video may contain sensitive "
+                "information. Review the archive before sharing; qabot does not guarantee "
+                "sanitization."
+            )
+            print(f"Bundle: {bundle_run(Path(args.run_dir))}")
+            return 0
+        if args.journey_command == "doctor":
+            return doctor_command(args)
         out = Path(args.out).resolve() if args.out else default_run_directory(Path(args.plan))
         result = run_plan(
             Path(args.plan),
@@ -62,7 +74,15 @@ def command(args):
         )
         print(f"Report: {out / 'report.html'}")
         return result
-    except (ApprovalError, DiscoveryError, LLMError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
+    except (
+        ApprovalError,
+        BundleError,
+        DiscoveryError,
+        LLMError,
+        OSError,
+        ValueError,
+        subprocess.TimeoutExpired,
+    ) as exc:
         print(f"qabot journeys: {exc}", file=sys.stderr)
         return 2
 
@@ -81,6 +101,21 @@ def add_parser(sub):
     )
     approve.add_argument("plan")
     approve.add_argument("--reviewer", required=True)
+    bundle = commands.add_parser(
+        "bundle",
+        help="create a local ZIP of reports and referenced journey evidence",
+        description=(
+            "Create a local ZIP beside RUN_DIR. The archive includes report.html, "
+            "report.md, results.json, and only evidence files referenced by results.json. "
+            "Review before sharing; no sanitization or upload is performed."
+        ),
+    )
+    bundle.add_argument("run_dir", metavar="RUN_DIR")
+    doctor = commands.add_parser(
+        "doctor",
+        help="check local journey prerequisites without auth or provider calls",
+    )
+    doctor.add_argument("--repo", help="optional local Git repository path to validate")
     run = commands.add_parser("run", help="start the approved application and record journeys")
     run.add_argument("plan")
     run.add_argument(

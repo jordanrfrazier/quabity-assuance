@@ -67,6 +67,38 @@ def test_decision_prompt_treats_quoted_input_as_literal_data(page):
 
 
 @pytest.mark.browser
+def test_decision_prompt_preserves_searchbox_role_between_fill_and_press(page):
+    from qabot.journeys.walker import WALK_SYSTEM, _decide
+
+    item = journey()
+    item.steps[0] = JourneyStep(
+        do=(
+            "Search for QABot PR1363 Alpha using the search control and submit the "
+            "search with Enter."
+        ),
+        see="Matching bookmarks are visible",
+    )
+    page.set_content('<label>Search for words or #tags<input type="search"></label>')
+
+    class CheckPrompt:
+        def complete_json(self, system, prompt, schema_hint):
+            assert system == WALK_SYSTEM
+            assert '"role":"textbox"|"searchbox"' in system
+            assert '"role":"button"|"textbox"|"searchbox"' in system
+            assert "Native search inputs are searchbox controls, not textbox controls" in system
+            assert "preserve the same observed role and name from the fill action" in system
+            assert 'searchbox "Search for words or #tags"' in prompt
+            return {
+                "op": "fill",
+                "role": "searchbox",
+                "name": "Search for words or #tags",
+                "value": "QABot PR1363 Alpha",
+            }
+
+    assert _decide(CheckPrompt(), item, 0, page, [])["role"] == "searchbox"
+
+
+@pytest.mark.browser
 def test_expected_error_is_judged_not_automatically_failed(page, tmp_path):
     page.set_content("<h1>Build failed</h1><p>Custom components are disabled</p>")
     llm = Decisions(
@@ -114,6 +146,86 @@ def test_model_failure_preserves_completed_actions(page, tmp_path):
     assert "model unavailable" in result.why
 
 
+@pytest.mark.browser
+def test_final_judgment_screenshot_replaces_transient_action_screenshot(
+    page, tmp_path, monkeypatch
+):
+    from qabot.journeys import walker
+
+    page.set_content(
+        """
+        <label>Message<input oninput="
+            document.querySelector('#status').textContent='Loading...';
+        "></label>
+        <div id="status">Idle</div>
+        """
+    )
+    captures = []
+    original_screenshot = walker._screenshot
+
+    def record_screenshot(page, artifacts, index, n):
+        captures.append(page.locator("#status").inner_text())
+        return original_screenshot(page, artifacts, index, n)
+
+    class FinalReady:
+        name = "test-only"
+
+        def __init__(self):
+            self.calls = 0
+
+        def complete_json(self, *args):
+            self.calls += 1
+            if self.calls == 1:
+                return {"op": "fill", "role": "textbox", "name": "Message", "value": "go"}
+            if self.calls == 2:
+                page.locator("#status").evaluate("element => element.textContent = 'Ready'")
+                return {"op": "done"}
+            return {"verdict": "held", "reason": "Ready"}
+
+    monkeypatch.setattr(walker, "_screenshot", record_screenshot)
+
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, FinalReady(), tmp_path)
+
+    assert result.outcome == Outcome.PASS
+    assert result.steps[0].outcome == StepOutcome.HELD
+    assert result.steps[0].actions[0].screenshot
+    assert result.steps[0].screenshot
+    assert result.steps[0].screenshot != result.steps[0].actions[0].screenshot
+    assert Path(result.steps[0].actions[0].screenshot).is_file()
+    assert Path(result.steps[0].screenshot).is_file()
+    assert Path(result.steps[0].screenshot).name == "settled_01_02.png"
+    assert captures == ["Loading...", "Ready"]
+
+
+@pytest.mark.browser
+def test_done_without_action_captures_final_judgment_screenshot(page, tmp_path):
+    page.set_content("<p>Ready</p>")
+    llm = Decisions({"op": "done"}, {"verdict": "held", "reason": "Ready"})
+
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, llm, tmp_path)
+
+    assert result.outcome == Outcome.PASS
+    assert result.steps[0].actions == []
+    assert result.steps[0].screenshot
+    assert Path(result.steps[0].screenshot).is_file()
+    assert Path(result.steps[0].screenshot).name == "settled_01_01.png"
+
+
+@pytest.mark.browser
+def test_missing_final_judgment_screenshot_blocks_with_diagnostic(page, tmp_path, monkeypatch):
+    from qabot.journeys import walker
+
+    page.set_content("<p>Ready</p>")
+    llm = Decisions({"op": "done"})
+    monkeypatch.setattr(walker, "_screenshot", lambda *args: None)
+
+    result = walk(journey(), BrowserDriver("http://localhost", page), page, llm, tmp_path)
+
+    assert result.outcome == Outcome.BLOCKED
+    assert result.steps[0].screenshot is None
+    assert result.steps[0].reason == "could not capture final judged screenshot"
+
+
 def test_unknown_configuration_blocks_required_state():
     j = journey()
     j.preconditions.settings = {"ALLOW_CUSTOM": "false"}
@@ -130,6 +242,47 @@ def test_secret_preconditions_resolve_without_leaking_mismatch():
     assert errors
     assert "actual-secret" not in str(errors)
     assert "different" not in str(errors)
+
+
+def test_empty_state_preconditions_do_not_block():
+    assert unmet_preconditions(journey(), None) == []
+
+
+def test_declared_state_preconditions_block_before_browser_and_model_calls(tmp_path):
+    secret = "tenant-123-secret"
+    item = Journey(
+        id="test",
+        title="Diagnostic",
+        persona="reviewer",
+        preconditions={"state": [f"Database seeded for {secret}"]},
+        steps=[
+            JourneyStep(do="Build", see="Custom components are disabled"),
+            JourneyStep(do="Publish", see="Published flow is visible"),
+        ],
+    )
+
+    class NoBrowser:
+        def redact(self, value):
+            return str(value).replace(secret, "[REDACTED]")
+
+        def execute(self, action):
+            raise AssertionError("driver must not be called")
+
+    class NoModel:
+        def complete_json(self, *args):
+            raise AssertionError("model must not be called")
+
+    result = walk(item, NoBrowser(), None, NoModel(), tmp_path)
+
+    assert result.outcome == Outcome.BLOCKED
+    assert [step.outcome for step in result.steps] == [
+        StepOutcome.NOT_REACHED,
+        StepOutcome.NOT_REACHED,
+    ]
+    assert all(step.actions == [] for step in result.steps)
+    assert "state precondition cannot be verified in V1" in result.why
+    assert "[REDACTED]" in result.model_dump_json()
+    assert secret not in result.model_dump_json()
 
 
 def test_preconditions_compare_supplied_setting_strings_exactly():
@@ -181,6 +334,49 @@ def test_press_and_scoped_controls_work_without_first_match(page, tmp_path):
     assert result.outcome == Outcome.PASS
     assert page.title() == "built"
     assert [a.op for a in result.steps[0].actions] == ["press", "click"]
+
+
+@pytest.mark.browser
+def test_searchbox_fill_and_press_enter_use_observed_role_without_fallback(page, tmp_path):
+    page.route(
+        "http://localhost/**",
+        lambda route: route.fulfill(
+            content_type="text/html",
+            body=(
+                '<label>Search for words or #tags'
+                '<input type="search" '
+                "onkeydown=\"if(event.key==='Enter')document.body.dataset.submitted=this.value\">"
+                "</label>"
+            ),
+        ),
+    )
+    page.goto("http://localhost/")
+    driver = JourneyBrowserDriver("http://localhost", page, tmp_path)
+    llm = Decisions(
+        {
+            "op": "fill",
+            "role": "searchbox",
+            "name": "Search for words or #tags",
+            "value": "QABot PR1363 Alpha",
+        },
+        {
+            "op": "press",
+            "role": "searchbox",
+            "name": "Search for words or #tags",
+            "key": "Enter",
+        },
+        {"op": "done"},
+        {"verdict": "held", "reason": "Search submitted"},
+    )
+
+    result = walk(journey(), driver, page, llm, tmp_path)
+
+    assert result.outcome == Outcome.PASS
+    assert page.locator("body").get_attribute("data-submitted") == "QABot PR1363 Alpha"
+    assert [(a.op, a.params["role"]) for a in result.steps[0].actions] == [
+        ("fill", "searchbox"),
+        ("press", "searchbox"),
+    ]
 
 
 @pytest.mark.browser

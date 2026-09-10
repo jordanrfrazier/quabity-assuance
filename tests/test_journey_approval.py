@@ -201,6 +201,72 @@ def test_directory_option_is_not_a_referenced_script(tmp_path):
 @pytest.mark.parametrize(
     "command",
     [
+        "mkdir -p runtime/config",
+        "mkdir -p runtime/generated.py",
+        "mkdir -p /tmp/qabot-approval-test-runtime/config",
+        "env PYTHONPATH=src mkdir -p runtime/config",
+        "sh -c 'mkdir -p runtime/config'",
+    ],
+)
+def test_mkdir_operands_are_not_referenced_setup_scripts(tmp_path, command):
+    plan_path, _ = _write_plan(tmp_path)
+    parsed = json.loads(plan_path.read_text())
+    parsed["startup"]["setup_commands"] = [command]
+    plan_path.write_text(json.dumps(parsed))
+
+    approve_plan(plan_path, reviewer="Jordan")
+
+    approval = require_approval(plan_path)
+    assert approval["reviewer"] == "Jordan"
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "mkdir -p runtime/config && sh scripts/setup.sh",
+        "env PYTHONPATH=src sh scripts/setup.sh",
+        "env -C elsewhere sh scripts/setup.sh",
+        "exec sh scripts/setup.sh",
+        "command sh scripts/setup.sh",
+        "uv run --offline --no-sync python scripts/setup.py",
+        "uv run --python 3.13 python scripts/setup.py",
+        "python3.13 scripts/setup.py",
+        "source scripts/setup.sh",
+        "sh -c 'mkdir -p runtime/generated.py && sh scripts/setup.sh'",
+    ],
+)
+def test_command_boundaries_and_wrappers_still_bind_real_scripts(tmp_path, command):
+    plan_path, setup_script = _write_plan(tmp_path)
+    if "scripts/setup.py" in command:
+        setup_script = setup_script.with_suffix(".py")
+        setup_script.write_text("print('ready')\n", encoding="utf-8")
+    parsed = json.loads(plan_path.read_text())
+    parsed["startup"]["command"] = command
+    parsed["startup"]["setup_commands"] = []
+    plan_path.write_text(json.dumps(parsed))
+    approve_plan(plan_path, reviewer="Jordan")
+    require_approval(plan_path)
+
+    setup_script.write_text("echo changed\n", encoding="utf-8")
+
+    with pytest.raises(ApprovalError, match="setup script"):
+        require_approval(plan_path)
+
+
+def test_missing_script_after_mkdir_boundary_cannot_be_approved(tmp_path):
+    plan_path, _ = _write_plan(tmp_path)
+    parsed = json.loads(plan_path.read_text())
+    parsed["startup"]["command"] = "mkdir -p runtime/config && sh scripts/missing.py"
+    parsed["startup"]["setup_commands"] = []
+    plan_path.write_text(json.dumps(parsed))
+
+    with pytest.raises(ApprovalError, match="script does not exist"):
+        approve_plan(plan_path, "test")
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
         "cd scripts && sh setup.sh",
         "pushd scripts; sh setup.sh",
         "popd; sh setup.sh",

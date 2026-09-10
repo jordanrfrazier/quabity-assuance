@@ -2,36 +2,52 @@
 
 A local CLI for reviewing application setup and recording QA journeys in Chrome.
 It reads repository evidence and a change description, proposes an editable plan,
-requires approval, then starts the application and records browser evidence.
-The earlier CI, demo, and anonymous-scan prototypes remain available below.
+requires approval, starts the application with reviewed local commands, records
+browser evidence, supports reruns, and can package completed evidence for local
+offline review. The earlier demo and scan prototypes remain available below, but
+the reviewed journey workflow is the main product path.
 
 ## Reviewed Browser Journeys
 
-Workspace: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`, branch `feature/qabot-journeys-cli`.
-
-Keep linked worktrees under the primary project's `.worktrees/` directory.
-The former direct `/private/tmp/` CLI and combined Langflow worktrees were moved
-there without discarding local changes. Historical evidence retains its original
-paths; existing plans and approvals must be reviewed before reuse after relocation.
 Requires macOS, installed Google Chrome, `uv`, and an authenticated `claude` CLI.
-Journey commands use real Claude/Sonnet calls, not the legacy offline provider.
+Journey planning, browser acting, and judging use real Claude/Sonnet calls through
+the local CLI; they are not the legacy deterministic demo provider. Run from the
+qabot repository root.
 
 ```sh
-cd /Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli
+git clone https://github.com/jordanrfrazier/quabity-assuance.git qabot
+cd qabot
+
+export TARGET_REPO=/path/to/application-repo
+export BASE_REF=main
+export HEAD_REF=my-change
+export CHANGE_DESCRIPTION=/path/to/change-description.md
+export REVIEWER_NAME="Your name"
+export PLAN_PATH=v1/reports/manual-first-use-01/plan.json
+export RUN_DIR=v1/reports/manual-first-use-01/run-01
+
 uv sync --extra dev --extra browser
+uv run qabot journeys doctor --repo "$TARGET_REPO"
 uv run qabot journeys --help
 
-uv run qabot journeys plan --repo /absolute/application/path --base BASE --head HEAD \
-  --description /absolute/change-description.md --out /absolute/new-plan.json
-uv run qabot journeys approve /absolute/new-plan.json --reviewer "Your name"
-uv run qabot journeys run /absolute/new-plan.json --headed --channel chrome
+uv run qabot journeys plan --repo "$TARGET_REPO" --base "$BASE_REF" --head "$HEAD_REF" \
+  --description "$CHANGE_DESCRIPTION" --out "$PLAN_PATH"
+
+# Edit the JSON before approval: commands, settings, credentials, state, actions,
+# and expected observations are proposed evidence, not trusted results.
+uv run qabot journeys approve "$PLAN_PATH" --reviewer "$REVIEWER_NAME"
+
+uv run qabot journeys run "$PLAN_PATH" --out "$RUN_DIR" --headed --channel chrome
+
+uv run qabot journeys run "$PLAN_PATH" --out "${RUN_DIR}-rerun" --headed --channel chrome
 ```
 
 Review the proposed command, environment, prerequisites, actions, and expected
 observations before approving. Generated plans are not trusted test results. Put
 credential references such as `${API_KEY}` in the plan, never values. An optional
-`--env-file /absolute/private/.env` on `run` loads only required names; explicit
-plan flags still win. Login actions must name their credential references.
+`--env-file "$PRIVATE_ENV_FILE"` on `run` loads only required names; omit it when
+the approved plan has no credential references. Explicit plan flags still win.
+Login actions must name their credential references.
 Run preflight rejects nonempty literal values in recognized credential-named
 environment entries and URLs with embedded credentials, before creating reports.
 Use a complete `${NAME}` reference, not a reference mixed with a literal secret.
@@ -44,18 +60,44 @@ The macOS pilot requires `lsof` on `PATH` to verify local listener ownership.
 The target port must be free before setup and startup. Keep the reviewed app in
 the foreground; daemonized or detached listeners cannot establish owned readiness.
 Required setting strings must match exactly, including case and whitespace.
+Any nonempty `preconditions.state` list blocks the journey in V1 before browser
+actions or model calls. A startup or reset command alone does not satisfy arbitrary
+prose state. Keep the requirement, or explicitly review its replacement with
+verifiable fixture checks and browser observations; never remove a prerequisite
+only to obtain PASS.
 
 Each new run writes `report.html`, `report.md`, `results.json`, startup logs,
 screenshots, and per-journey WebM video. Open the HTML directly in Chrome.
 Executed setup commands retain redacted stdout/stderr in `setup-01.log`, etc.;
 journey resets use `journey-01-reset.log`, etc. Failure diagnostics name the log.
-Browser cleanup or missing required video can block a journey, but completed
-steps and findings remain in the report with the cleanup diagnostic.
+Step screenshots link to the final observed state used for judgment; action
+records keep their own per-action screenshots. If qabot cannot capture that final
+judged-state screenshot, the step is BLOCKED with a capture diagnostic.
+Application/browser cleanup or missing required video can block a journey, but
+completed steps and findings remain in the report with the cleanup diagnostic.
+Application cleanup and log-finalization errors retain final report metadata;
+they block otherwise passing results without replacing an existing FAIL.
 The default destination is a unique directory beneath the primary Git workspace's
 `v1/reports/`, including when invoked from a linked worktree. Outside Git, the
 invocation directory is used as the root. An explicit `--out` selects another new
 directory. Reports use relative media links and include measured phase timing,
 model call counts, and approximate video chapter links when timing is available.
+
+Package a completed run for offline review with:
+
+```sh
+uv run qabot journeys bundle "$RUN_DIR"
+```
+
+This creates `"$RUN_DIR.zip"` next to the run, without overwriting an existing
+archive or changing original evidence. The ZIP contains `report.html`, `report.md`,
+`results.json`, and referenced screenshots/videos with relative media links intact.
+Standalone logs, runtime configuration files, databases, credential files, and
+unreferenced files are excluded. Missing, unsafe, absolute, or symlink evidence
+references fail clearly. Extract the ZIP before opening `report.html`. Review
+metadata and media for sensitive information before sharing; bundling is not
+sanitization and performs no upload, hosting, model call, or application rerun.
+
 Exit codes are `0` for all PASS, `1` for any FAIL, and `2` for BLOCKED without FAIL
 or an invalid command/approval; Ctrl-C retains partial evidence and exits `130`.
 A correctly observed expected rejection can PASS. A failed browser action blocks
@@ -66,8 +108,8 @@ even when the plan text is unchanged. Older approvals without Git bindings must
 be reviewed again. An unchanged approved target and plan can be rerun to a fresh
 output directory without another approval prompt.
 
-Manual walkthrough: [examples/WALKTHROUGH.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/WALKTHROUGH.md).
-Product requirements: [docs/PRD.md](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/docs/PRD.md).
+Manual walkthrough: [examples/WALKTHROUGH.md](examples/WALKTHROUGH.md).
+Product requirements: [docs/PRD.md](docs/PRD.md).
 This is a local pilot, not a production-release certification.
 
 Design: `docs/superpowers/specs/2026-08-27-qa-bot-design.md`
@@ -107,38 +149,31 @@ pass, not a failure, and never silence.
 
 A third rule earns its place in the browser driver: **locators are a role and an accessible
 name, never CSS or XPath.** That keeps the knowledge base valid across restyles, and it
-means an unlabeled control is unreachable — so the bot reports BLOCKED and has, in passing,
-found an accessibility bug.
+means a control the actor cannot reach is BLOCKED until a human reviews whether the
+problem is an actor mistake, missing accessibility metadata, or some other UI mismatch.
 
-## Offline by default
+## Legacy Demo Offline By Default
 
-The default LLM provider is deterministic and needs no API key, so the suite and the demo
-are fully reproducible. The real providers are explicit opt-in — `QABOT_LLM=anthropic` over
-the SDK, or `QABOT_LLM=claude-cli` through a locally installed `claude` — and each raises
-when what it needs is missing: a key for the first, the binary on PATH for the second. The
-network is never a silent fallback.
+The legacy demo and scan prototype provider is deterministic and needs no API
+key, so those prototype paths are reproducible. The reviewed journey workflow
+above is live: planning, browser acting, and judging use real Claude/Sonnet calls
+through the local `claude` CLI. Other real providers remain explicit opt-in:
+`QABOT_LLM=anthropic` over the SDK, or `QABOT_LLM=claude-cli` through a locally
+installed `claude`. Each raises when what it needs is missing, and the network is
+never a silent fallback.
 
-## Two products
+## Legacy Prototypes
 
-`seed`, `run` and `demo` are one product, a merge gate. It needs a knowledge base seeded
-from an existing e2e suite and a diff to reason about, and it reports by passing or
-failing a CI build. It is for a team that already has tests and wants to know which of
-them a pull request put at risk.
+`seed`, `run`, `demo`, `demo-browser`, and `scan` are earlier prototype surfaces.
+They remain useful for local experiments and regression coverage, but they are not
+the reviewed Chrome journey workflow described above.
 
-`scan` is a different product for a different buyer: someone who built an app — often
-with an AI — and has no test suite, no fixtures, and no CI to gate. It takes nothing but
-a URL, crawls what it can reach anonymously, and writes a report to a file. It never
-fails a build (`qabot scan` always exits 0); the report is the deliverable, not a
-pass/fail signal.
+`scan` takes a URL, crawls what it can reach anonymously, and writes a report to a
+file. It never fails a build (`qabot scan` always exits 0); the report is the
+deliverable, not a pass/fail signal.
 
     uv run qabot scan https://example.com
 
 Flags: `--out` (default `qabot-scan-report.html`) is where the report is written,
 `--max-pages` (default `25`) caps the crawl, `--delay` (default `1.0`) is the seconds
 between page loads, and `--artifacts` (default `qa-artifacts`) is where screenshots land.
-
-The two products share a repository for one reason: the intrinsic oracles — crashes,
-console errors, failed requests, 5xxs — are the same code in both, and they are the half
-of this codebase the evaluation vindicated. The merge gate drives an app over HTTP and
-the scan drives it in a real browser, but both grade what comes back with
-`qabot/intrinsics.py`.

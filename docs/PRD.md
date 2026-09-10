@@ -3,10 +3,9 @@
 Status: Working draft; local CLI and reviewed local startup confirmed, release contract incomplete.
 Date: 2026-09-07.
 Decision maker for this drafting process: Jordan.
-Implementation directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`.
-Working branch: `feature/qabot-journeys-cli`.
-Original project: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`,
-branch `feature/qabot-scan`; its earlier draft is preserved.
+Implementation surface: local `qabot journeys` CLI run from the repository root.
+Historical pilot branches and evidence are archived implementation context, not
+portable setup prerequisites.
 
 ## 1. Product Definition
 
@@ -86,7 +85,7 @@ API, background service, or extensibility framework in this release. Its scope a
 implementation effort will be assessed after the CLI workflow is validated.
 
 Workflow learning and reuse are deferred, unimplemented proposals. Their design
-details live in the [v2 follow-up directory](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v2/README.md).
+details live in the [v2 follow-up directory](../v2/README.md).
 This deferral does not move the existing v1 release gaps into v2.
 
 ## 4. Core Workflow
@@ -321,9 +320,9 @@ general accuracy claim.
 On 2026-09-07 Jordan approved measurement, readiness improvements, and durable local
 evidence. FR-19 through FR-21 and AC-14 through AC-16 define that work; they do not
 set a production speed or cost threshold. The durable report root for this project
-is `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/`.
-Reports remain local and Git-ignored. This location is not a complete retention,
-redaction, or deletion policy under D-06.
+is the primary Git workspace's `v1/reports/`, or the invocation directory's
+`v1/reports/` outside Git. Reports remain local and Git-ignored. This location is
+not a complete retention, redaction, or deletion policy under D-06.
 
 The historical four-step diagnostic took approximately 1 minute 45 seconds and
 contained eight browser actions. One actor request and one judge request per action
@@ -378,23 +377,24 @@ check requirement-to-acceptance traceability, and submit the complete PRD for re
 
 ## 10. Evidence Register
 
-Local evidence was inspected on 2026-09-06. Saved browser reports were read, but their
-screenshots were not independently re-adjudicated during this PRD assessment.
-The earlier spike artifacts below remain at their recorded locations. The local
-CLI pilot's durable report location is listed in section 12. Retaining those files
-does not make them an independently adjudicated release evaluation package.
-External market assertions have not been reverified.
+Local evidence was inspected on 2026-09-06. Saved browser reports were read, but
+their screenshots were not independently re-adjudicated during this PRD assessment.
+The artifacts below are archived evidence for past decisions, not runnable
+prerequisites for a new user. The local CLI pilot's durable report location is
+listed in section 12. Retaining those files does not make them an independently
+adjudicated release evaluation package. External market assertions have not been
+reverified.
 
-- [Project assessment and test history](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/qabot_current_state.md).
-- [Journey spike design](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/superpowers/specs/2026-09-05-user-journeys-design.md).
-- [Written Langflow evaluation](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/EVAL.md:799).
-- [Fixed v3 report: zero PASS, one FAIL, six BLOCKED](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/qa-artifacts/journeys-2026-09-05/launch_fixed_v3/report.md).
-- [Broken v3 report: zero PASS, two FAIL, five BLOCKED](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/qa-artifacts/journeys-2026-09-05/launch_broken_v3/report.md).
-- [Recorded experimental ground truth](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/qa-artifacts/journeys-2026-09-05/GROUND_TRUTH.md).
-- [Strategy and acknowledged demand gaps](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/docs/STRATEGY.md).
-- [Existing settings-group launcher](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/spikes/journeys/launcher.py): accepts a supplied command, applies environment settings, and checks a health URL; discovery is not implemented here.
-- [Current evidence gathering](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/spikes/journeys/evidence.py): collects diff context and related tests; it does not discover a repository's startup plan.
-- [Current precondition checks](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/spikes/journeys/walker.py:305): compare supplied settings, with no check when the environment is unknown; they do not establish effective runtime configuration.
+- [Project assessment and test history](../qabot_current_state.md).
+- [Journey spike design](superpowers/specs/2026-09-05-user-journeys-design.md).
+- [Written Langflow evaluation](EVAL.md).
+- [Fixed v3 report: zero PASS, one FAIL, six BLOCKED](../qa-artifacts/journeys-2026-09-05/launch_fixed_v3/report.md).
+- [Broken v3 report: zero PASS, two FAIL, five BLOCKED](../qa-artifacts/journeys-2026-09-05/launch_broken_v3/report.md).
+- [Recorded experimental ground truth](../qa-artifacts/journeys-2026-09-05/GROUND_TRUTH.md).
+- [Strategy and acknowledged demand gaps](STRATEGY.md).
+- [Existing settings-group launcher](../spikes/journeys/launcher.py): accepts a supplied command, applies environment settings, and checks a health URL; discovery is not implemented here.
+- [Current evidence gathering](../spikes/journeys/evidence.py): collects diff context and related tests; it does not discover a repository's startup plan.
+- [Current precondition checks](../spikes/journeys/walker.py): compare supplied settings, with no check when the environment is unknown; they do not establish effective runtime configuration.
 
 ## 11. Decision Log
 
@@ -411,9 +411,10 @@ External market assertions have not been reverified.
 ## 12. Implementation-Informed Pilot
 
 Jordan subsequently requested implementation, a manual walkthrough, and iterative
-real-browser validation of PRs 14931 and 14913. The isolated implementation lives
-at `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli`, branch `feature/qabot-journeys-cli`. This
-section distinguishes observed pilot behavior from production requirements above.
+real-browser validation of PRs 14931 and 14913. This section distinguishes
+observed pilot behavior from production requirements above. Historical worktree
+and machine paths are archived evidence identifiers, not prerequisites for a new
+user.
 
 ### Historical Pilot CLI Contract
 
@@ -425,7 +426,32 @@ qabot journeys plan --repo PATH --base REF --head REF [--description FILE] --out
 qabot journeys approve PLAN.json --reviewer NAME
 qabot journeys run PLAN.json --out NEW_RUN_DIR [--headed] [--channel chrome|chromium]
                    [--env-file PRIVATE_DOTENV] [--journey ID]
+qabot journeys doctor [--repo PATH]
+qabot journeys bundle RUN_DIR
 ```
+
+### Local Report Packaging - 2026-09-08
+
+The approved V1 addition is `qabot journeys bundle RUN_DIR`. It creates
+`RUN_DIR.zip` alongside a retained run using exclusive creation: existing archives
+are not replaced. The archive contains `report.html`, `report.md`, `results.json`,
+and videos/screenshots referenced by structured results, including action
+screenshots, with the original relative directory layout. Report content and
+evidence bytes remain unchanged. Recipients extract the archive and open
+`report.html` locally.
+
+Packaging is allowlisted, not a recursive directory export. Standalone logs,
+runtime configuration files, databases, credential files, and unrelated files are
+excluded. Missing evidence, malformed report metadata, unsafe paths, absolute
+paths, and symlink evidence cause a clear failure rather than an incomplete
+bundle. Failed archive creation must not leave a partial ZIP. The CLI warns that
+report metadata, screenshots, and videos may contain sensitive information and
+require human review; it does not claim to sanitize content. The command performs
+no model calls, application startup, hosting, upload, or external sharing.
+Bundling success is independent of the recorded journey outcome: FAIL and BLOCKED
+evidence can be packaged for review.
+
+### Pilot Execution Notes
 
 - Discovery is non-executing and bounded. It collects scoped Git changes, current
   documentation, manifests, configuration definitions, related tests, and local
@@ -444,6 +470,11 @@ qabot journeys run PLAN.json --out NEW_RUN_DIR [--headed] [--channel chrome|chro
   servers and unverifiable ownership block. Unknown or mismatched required
   settings block execution; string comparisons preserve case and whitespace.
   Listener ownership is rechecked before each journey, after any reviewed reset.
+  Under the V1 fail-closed policy approved on 2026-09-08, a nonempty
+  `preconditions.state` list blocks the journey before browser actions or model
+  calls. All steps remain NOT_REACHED and the report names the unverifiable
+  prerequisites with text redaction. Startup/reset completion does not prove
+  arbitrary prose state; model-driven state verification remains unimplemented.
 - `--env-file` loads only credential names required by the plan. Explicit nonsecret
   plan values take precedence. References resolve against the source environment
   before plan overrides, independent of mapping order; referenced values remain
@@ -466,6 +497,8 @@ qabot journeys run PLAN.json --out NEW_RUN_DIR [--headed] [--channel chrome|chro
   those logs; setup/reset capture failures cannot silently count as success.
   Completed steps and findings survive context cleanup/video-finalization failures;
   cleanup diagnostics can block the result without replacing its recorded evidence.
+  Application teardown and startup-log finalization failures retain final metadata
+  and block otherwise passing results while preserving any existing FAIL outcome.
 - The pilot exit contract is 0 for all PASS, 1 for any FAIL, 2 for BLOCKED
   without FAIL or invalid input/approval, and 130 for user cancellation with partial
   evidence retained. This is the implementation baseline for
@@ -532,21 +565,21 @@ separate product evidence, not substituted by mocked model tests.
 
 Pilot walkthrough and retained evidence locations:
 
-The original CLI archive at `/private/tmp/qabot-cli-2026-09-06/qa-artifacts/` was
-copied to the durable report root on September 7, preserving run directory names.
-All 1,306 copied files matched the original SHA-256 hashes before report media-path
-normalization. The originals remain retained; relocation does not change their
-historical verdicts or supply missing timing. The
-[migration manifest](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/migration-manifest.json)
-records the source hashes.
+The original CLI archive from a temporary September 6 pilot location was copied
+to the durable report root on September 7, preserving run directory names. All
+1,306 copied files matched the original SHA-256 hashes before report media-path
+normalization. The original machine paths remain historical provenance only;
+relocation does not change verdicts or supply missing timing. The
+[migration manifest](../v1/reports/migration-manifest.json) records the source
+hashes.
 
-- [Walkthrough](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/WALKTHROUGH.md).
-- [Langflow diagnostic](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-diagnostic-run1/report.html).
-- [Langflow Assistant](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-assistant-20260906-1343/report.html).
-- [Independent shop](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/shop-20260906-final/report.html).
-- [Langflow editor](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-editor-20260906-final3/report.html).
-- [Langflow discovery v3](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/langflow-20260906/discovered-plan-v3.json).
-- [Shop validation notes](/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-journeys-cli/examples/shop/live-validation-report.md).
+- [Portable walkthrough](../examples/WALKTHROUGH.md).
+- Archived Langflow diagnostic: `v1/reports/langflow-diagnostic-run1/report.html`.
+- Archived Langflow Assistant: `v1/reports/langflow-assistant-20260906-1343/report.html`.
+- Archived independent shop: `v1/reports/shop-20260906-final/report.html`.
+- Archived Langflow editor: `v1/reports/langflow-editor-20260906-final3/report.html`.
+- Archived Langflow discovery v3: `v1/reports/langflow-20260906/discovered-plan-v3.json`.
+- Archived shop validation notes: `examples/shop/live-validation-report.md`.
 
 ### Remaining Release Gaps
 

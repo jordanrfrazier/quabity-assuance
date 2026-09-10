@@ -226,12 +226,48 @@ def _healthy(url):
         return False
 
 
+def _process_group_members(pgid: int) -> list[str]:
+    try:
+        result = subprocess.run(
+            ["ps", "-axo", "pid=,pgid=,stat="],
+            text=True,
+            capture_output=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"could not inspect process group {pgid}: {exc}") from exc
+    if result.returncode != 0:
+        detail = result.stderr.strip() or f"ps exited {result.returncode}"
+        raise RuntimeError(f"could not inspect process group {pgid}: {detail}")
+    if not result.stdout.strip():
+        raise RuntimeError(f"could not inspect process group {pgid}: ps returned no rows")
+    members = []
+    for line in result.stdout.splitlines():
+        parts = line.strip().split(None, 2)
+        if len(parts) != 3:
+            raise RuntimeError(f"could not inspect process group {pgid}: malformed ps row")
+        try:
+            pid = int(parts[0])
+            member_pgid = int(parts[1])
+        except ValueError:
+            raise RuntimeError(f"could not inspect process group {pgid}: malformed ps row")
+        if member_pgid == pgid:
+            members.append(f"{pid} {parts[2]}")
+    return members
+
+
 def _stop(process):
+    diagnostics = []
     if process is None:
-        return
+        return diagnostics
+    sigkill_error = None
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
+        pass
+    except PermissionError:
+        # A later SIGKILL/wait can still verify cleanup; report only unresolved final failures.
         pass
     try:
         process.wait(timeout=8)
@@ -242,7 +278,25 @@ def _stop(process):
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    process.wait(timeout=5)
+    except PermissionError as exc:
+        sigkill_error = exc
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired as exc:
+        diagnostics.append(f"process group {process.pid} did not exit after SIGKILL: {exc}")
+    if sigkill_error is not None:
+        try:
+            members = _process_group_members(process.pid)
+        except RuntimeError as exc:
+            diagnostics.append(f"SIGKILL process group {process.pid} failed: {sigkill_error}; {exc}")
+        else:
+            if members:
+                sample = "; ".join(members[:5])
+                diagnostics.append(
+                    f"SIGKILL process group {process.pid} failed: {sigkill_error}; "
+                    f"surviving members: {sample}"
+                )
+    return diagnostics
 
 
 def _secret_variants(secrets):
@@ -359,9 +413,14 @@ def _run_command(command, *, cwd, env, log_path, log_ref, redact, secrets, label
         if primary_error is not None:
             raise primary_error
     finally:
-        _stop(process)
+        cleanup_diagnostics = _stop(process)
         log_thread.join(timeout=5)
         if not isinstance(primary_error, KeyboardInterrupt):
+            if cleanup_diagnostics:
+                raise RuntimeError(
+                    f"{label} cleanup incomplete for {log_ref}: "
+                    + "; ".join(cleanup_diagnostics)
+                )
             capture_errors = getattr(log_thread, "capture_errors", [])
             if capture_errors:
                 raise RuntimeError(
@@ -390,6 +449,12 @@ def _block_result(result, reason):
     prior = result.why or f"completed with {result.outcome.value}"
     result.outcome = Outcome.BLOCKED
     result.why = f"{reason}; completed result was {prior}"
+
+
+def _block_pass_results(results, reason):
+    for result in results:
+        if result.outcome == Outcome.PASS:
+            _block_result(result, reason)
 
 
 def run_plan(
@@ -631,9 +696,37 @@ def run_plan(
         reason = f"Execution blocked: {type(exc).__name__}: {exc}"
         results.extend(_blocked(j, reason) for j in journeys[len(results) :])
     finally:
-        _stop(process)
+        cleanup_diagnostics = []
+        try:
+            cleanup_diagnostics = _stop(process)
+        except Exception as exc:  # noqa: BLE001 -- final report must retain cleanup diagnostics.
+            cleanup_diagnostics = [f"application process cleanup raised {type(exc).__name__}: {exc}"]
+        if cleanup_diagnostics:
+            reason = "Application cleanup incomplete: " + "; ".join(cleanup_diagnostics)
+            metadata.setdefault("cleanup", {})["application"] = cleanup_diagnostics
+            metadata["limitations"].append(reason)
+            _block_pass_results(results, reason)
         if log_thread:
-            log_thread.join(timeout=5)
+            startup_log_diagnostics = []
+            try:
+                log_thread.join(timeout=5)
+                capture_errors = getattr(log_thread, "capture_errors", [])
+                for error in capture_errors:
+                    startup_log_diagnostics.append(f"startup log capture failed: {error}")
+                alive = log_thread.is_alive()
+                if alive:
+                    startup_log_diagnostics.append("startup log capture did not finish")
+            except Exception as exc:  # noqa: BLE001 -- preserve final report with cleanup diagnostic.
+                startup_log_diagnostics.append(
+                    f"startup log finalization raised {type(exc).__name__}: {exc}"
+                )
+            if startup_log_diagnostics:
+                reason = "Application output capture incomplete: " + "; ".join(
+                    startup_log_diagnostics
+                )
+                metadata.setdefault("cleanup", {})["startup_log"] = [reason]
+                metadata["limitations"].append(reason)
+                _block_pass_results(results, reason)
         metadata["finished_at"] = datetime.now(UTC).isoformat()
         metadata["cancelled"] = cancelled
         persist()

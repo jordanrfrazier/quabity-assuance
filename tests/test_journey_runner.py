@@ -1138,6 +1138,365 @@ def test_context_close_failure_preserves_completed_result_evidence(
     assert video_path_calls == []
 
 
+def test_application_cleanup_permission_error_preserves_final_report(
+    tmp_path, monkeypatch
+):
+    import signal
+
+    from qabot.journeys import runner
+
+    class FakeVideo:
+        def __init__(self, path):
+            self._path = path
+
+        def path(self):
+            return str(self._path)
+
+    class FakePage:
+        def __init__(self, path):
+            self.video = FakeVideo(path)
+
+    class FakeContext:
+        def __init__(self, path):
+            self._path = path
+            self._page = FakePage(path)
+
+        def new_page(self):
+            return self._page
+
+        def close(self):
+            self._path.write_bytes(b"fake video")
+
+    class FakeBrowser:
+        def new_context(self, **kwargs):
+            return FakeContext(Path(kwargs["record_video_dir"]) / "video.webm")
+
+        def close(self):
+            pass
+
+    class FakeChromium:
+        def launch(self, *, channel, headless):
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class FakeLogThread:
+        capture_errors = ()
+
+        def join(self, timeout=None):
+            return None
+
+        def is_alive(self):
+            return False
+
+    class FakeProcess:
+        pid = 24680
+        stdout = types.SimpleNamespace(read=lambda size: b"")
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_run(args, **kwargs):
+        if args[:2] == ["git", "status"]:
+            return types.SimpleNamespace(stdout="")
+        return types.SimpleNamespace(stdout="HEAD\n")
+
+    def fake_walk(journey, driver, page, llm, artifacts, env):
+        return JourneyResult(
+            journey=journey,
+            outcome=Outcome.PASS,
+            steps=[
+                StepResult(
+                    index=0,
+                    do=journey.steps[0].do,
+                    see=journey.steps[0].see,
+                    outcome=StepOutcome.HELD,
+                    reason="held before cleanup",
+                )
+            ],
+        )
+
+    module = types.ModuleType("playwright.sync_api")
+    module.sync_playwright = lambda: FakePlaywright()
+    path = make_plan(tmp_path, 9876)
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", module)
+    monkeypatch.setattr(runner, "require_approval", lambda plan_path: {"reviewer": "test"})
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
+    monkeypatch.setattr(runner, "_healthy", lambda url: True)
+    monkeypatch.setattr(runner, "ensure_endpoint_available", lambda url: None)
+    monkeypatch.setattr(runner, "require_owned_endpoint", lambda url, process: None)
+    monkeypatch.setattr(runner, "_start_log_thread", lambda *args, **kwargs: FakeLogThread())
+    monkeypatch.setattr(
+        runner,
+        "_process_group_members",
+        lambda pgid: ["24681 S child still running"],
+    )
+    monkeypatch.setattr(runner, "JourneyBrowserDriver", lambda *args, **kwargs: object())
+    monkeypatch.setattr(runner, "walk", fake_walk)
+
+    kill_signals = []
+
+    def fake_killpg(pid, sig):
+        kill_signals.append(sig)
+        if sig == signal.SIGKILL:
+            raise PermissionError("operation not permitted")
+
+    monkeypatch.setattr(runner.os, "killpg", fake_killpg)
+    out = tmp_path / "cleanup-permission"
+
+    assert run_plan(path, out, headed=False, channel="chrome", llm=Decisions()) == 2
+
+    report = json.loads((out / "results.json").read_text())
+    assert report["finished_at"]
+    assert report["cancelled"] is False
+    assert report["cleanup"]["application"]
+    assert "SIGKILL process group 24680 failed" in report["cleanup"]["application"][0]
+    assert "surviving members: 24681 S child still running" in report["cleanup"]["application"][0]
+    assert "Application cleanup incomplete" in report["limitations"][-1]
+    result = report["results"][0]
+    assert result["outcome"] == "blocked"
+    assert "Application cleanup incomplete" in result["why"]
+    assert result["steps"][0]["outcome"] == "held"
+    assert result["steps"][0]["reason"] == "held before cleanup"
+    assert (out / result["video"]).is_file()
+    assert signal.SIGTERM in kill_signals and signal.SIGKILL in kill_signals
+
+
+def test_application_cleanup_finalizer_records_stop_and_log_thread_errors(
+    tmp_path, monkeypatch
+):
+    from qabot.journeys import runner
+
+    class FakeVideo:
+        def __init__(self, path):
+            self._path = path
+
+        def path(self):
+            return str(self._path)
+
+    class FakePage:
+        def __init__(self, path):
+            self.video = FakeVideo(path)
+
+    class FakeContext:
+        def __init__(self, path):
+            self._path = path
+            self._page = FakePage(path)
+
+        def new_page(self):
+            return self._page
+
+        def close(self):
+            self._path.write_bytes(b"fake video")
+
+    class FakeBrowser:
+        def new_context(self, **kwargs):
+            return FakeContext(Path(kwargs["record_video_dir"]) / "video.webm")
+
+        def close(self):
+            pass
+
+    class FakeChromium:
+        def launch(self, *, channel, headless):
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class RaisingLogThread:
+        capture_errors = ()
+
+        def join(self, timeout=None):
+            raise RuntimeError("join failed")
+
+        def is_alive(self):
+            raise RuntimeError("status failed")
+
+    class FakeProcess:
+        pid = 13579
+        stdout = types.SimpleNamespace(read=lambda size: b"")
+
+        def poll(self):
+            return None
+
+    def fake_run(args, **kwargs):
+        if args[:2] == ["git", "status"]:
+            return types.SimpleNamespace(stdout="")
+        return types.SimpleNamespace(stdout="HEAD\n")
+
+    def fake_walk(journey, driver, page, llm, artifacts, env):
+        return JourneyResult(
+            journey=journey,
+            outcome=Outcome.FAIL,
+            why="expected text was absent",
+            steps=[
+                StepResult(
+                    index=0,
+                    do=journey.steps[0].do,
+                    see=journey.steps[0].see,
+                    outcome=StepOutcome.FAILED,
+                    reason="failed before finalizer cleanup",
+                )
+            ],
+        )
+
+    module = types.ModuleType("playwright.sync_api")
+    module.sync_playwright = lambda: FakePlaywright()
+    path = make_plan(tmp_path, 9876)
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(sys.modules, "playwright.sync_api", module)
+    monkeypatch.setattr(runner, "require_approval", lambda plan_path: {"reviewer": "test"})
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner.subprocess, "Popen", lambda *args, **kwargs: FakeProcess())
+    monkeypatch.setattr(runner, "_healthy", lambda url: True)
+    monkeypatch.setattr(runner, "ensure_endpoint_available", lambda url: None)
+    monkeypatch.setattr(runner, "require_owned_endpoint", lambda url, process: None)
+    monkeypatch.setattr(runner, "_start_log_thread", lambda *args, **kwargs: RaisingLogThread())
+    monkeypatch.setattr(runner, "_stop", lambda process: (_ for _ in ()).throw(PermissionError("denied")))
+    monkeypatch.setattr(runner, "JourneyBrowserDriver", lambda *args, **kwargs: object())
+    monkeypatch.setattr(runner, "walk", fake_walk)
+    out = tmp_path / "cleanup-finalizer-errors"
+
+    assert run_plan(path, out, headed=False, channel="chrome", llm=Decisions()) == 1
+
+    report = json.loads((out / "results.json").read_text())
+    assert report["finished_at"]
+    assert report["cancelled"] is False
+    assert report["cleanup"]["application"] == [
+        "application process cleanup raised PermissionError: denied"
+    ]
+    assert "join failed" in report["cleanup"]["startup_log"][0]
+    result = report["results"][0]
+    assert result["outcome"] == "fail"
+    assert result["why"] == "expected text was absent"
+    assert result["steps"][0]["outcome"] == "failed"
+    assert (out / result["video"]).is_file()
+
+
+def test_stop_reports_only_unresolved_cleanup_failures(monkeypatch):
+    import signal
+    import subprocess
+
+    from qabot.journeys.runner import _stop
+
+    class FakeProcess:
+        pid = 11223
+        waits = 0
+
+        def wait(self, timeout=None):
+            self.waits += 1
+            if self.waits == 1:
+                raise subprocess.TimeoutExpired("fake", timeout)
+            return 0
+
+    signals = []
+    monkeypatch.setattr(
+        "qabot.journeys.runner.os.killpg",
+        lambda pid, sig: signals.append(sig),
+    )
+
+    assert _stop(FakeProcess()) == []
+    assert signals == [signal.SIGTERM, signal.SIGKILL]
+
+
+def test_stop_does_not_report_sigkill_permission_error_when_group_is_empty(monkeypatch):
+    import signal
+
+    from qabot.journeys.runner import _stop
+
+    class FakeProcess:
+        pid = 33445
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_killpg(pid, sig):
+        if sig == signal.SIGKILL:
+            raise PermissionError("operation not permitted")
+
+    monkeypatch.setattr("qabot.journeys.runner.os.killpg", fake_killpg)
+    monkeypatch.setattr("qabot.journeys.runner._process_group_members", lambda pgid: [])
+
+    assert _stop(FakeProcess()) == []
+
+
+def test_process_group_members_uses_minimal_ps_snapshot(monkeypatch):
+    from qabot.journeys import runner
+
+    calls = []
+
+    def fake_run(args, **kwargs):
+        calls.append(args)
+        return types.SimpleNamespace(returncode=0, stdout="1 1 Ss\n22 33445 S+\n", stderr="")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+
+    assert runner._process_group_members(33445) == ["22 S+"]
+    assert calls == [["ps", "-axo", "pid=,pgid=,stat="]]
+
+
+@pytest.mark.parametrize("stdout", ["", "22 33445\nbad 33445 S\n"])
+def test_process_group_members_rejects_unverifiable_ps_output(monkeypatch, stdout):
+    from qabot.journeys import runner
+
+    monkeypatch.setattr(
+        runner.subprocess,
+        "run",
+        lambda *args, **kwargs: types.SimpleNamespace(returncode=0, stdout=stdout, stderr=""),
+    )
+
+    with pytest.raises(RuntimeError, match="could not inspect process group 33445"):
+        runner._process_group_members(33445)
+
+
+def test_stop_reports_sigkill_permission_error_when_group_inspection_is_unverifiable(
+    monkeypatch,
+):
+    import signal
+
+    from qabot.journeys.runner import _stop
+
+    class FakeProcess:
+        pid = 33445
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_killpg(pid, sig):
+        if sig == signal.SIGKILL:
+            raise PermissionError("operation not permitted")
+
+    monkeypatch.setattr("qabot.journeys.runner.os.killpg", fake_killpg)
+    monkeypatch.setattr(
+        "qabot.journeys.runner._process_group_members",
+        lambda pgid: (_ for _ in ()).throw(RuntimeError("ps returned no rows")),
+    )
+
+    diagnostics = _stop(FakeProcess())
+
+    assert len(diagnostics) == 1
+    assert "SIGKILL process group 33445 failed" in diagnostics[0]
+    assert "ps returned no rows" in diagnostics[0]
+
+
 def test_stop_kills_descendant_even_when_launcher_exits_on_term():
     import signal
     import subprocess

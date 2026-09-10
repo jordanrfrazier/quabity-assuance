@@ -1,5 +1,80 @@
 # qabot Current State
 
+## Private Alpha Main Integration - 2026-09-09
+
+- User requested integrating qabot worktrees and improving portable onboarding.
+- Active directory: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance`,
+  branch `main`, HEAD `629e143`; all new changes remain uncommitted.
+- The journey CLI branch was already merged. State-prerequisite enforcement and
+  report ZIP implementation/tests are now integrated from their dirty worktrees.
+- Deterministic `qabot journeys doctor [--repo PATH]` checks local prerequisites;
+  it does not verify provider authentication or application readiness.
+- Portable README/walkthrough/PRD are complete. Root combined edited-file tests:
+  204 passed; scoped Ruff passed. Main CLI doctor passed locally. The real-report
+  bundle smoke test passed with 18 extracted files byte-identical to the retained
+  evidence and standalone logs excluded.
+- User authorized Langflow/Linkding browser and provider calls, qabot fixes only.
+  Langflow closure-01 completed 3 PASS/16 held steps on the prior local fix overlay;
+  media decoded and key screenshots inspected. Closure-02 repeated 3 PASS/16 held
+  after a final judged-state screenshot capture fix. Its three videos decoded,
+  screenshots and near-final video frames were inspected, and a ZIP was created.
+  An approval mkdir-operand bug was also fixed (45 focused tests).
+- Linkding PR1363 model discovery, source review and isolated provisioning are
+  complete. Linkding-01 blocked on actor searchbox/textbox role drift. The generic
+  role instruction fix let Linkding-02 satisfy all 24 browser observations; both
+  final outcomes are BLOCKED by a process-group teardown permission error. Report
+  finalization now retains timestamps and diagnostics. Cleanup now verifies group
+  membership after a permission error without skipping descendant termination.
+  Linkding-03 completed exit 0: 2 PASS/24 held steps with no cleanup diagnostic.
+  Two videos decoded, 76 screenshot references audited, sorting/reload screenshots
+  and near-final frames independently inspected, and an 81-file ZIP verified.
+  Both earlier blocked runs remain intact; no Linkding defect is claimed.
+- Chrome automation denied opening the local report URL. No workaround was used;
+  retained HTML reports remain available for manual opening.
+- Target source identity rechecked: Linkding tracked tree remains clean; Langflow
+  retains exactly its pre-existing patch. Only qabot is receiving fixes.
+- Final owned application listeners on 7890/7891 are stopped. No commits made.
+- Recommended reports:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/private-alpha-20260909/langflow/runs/pr14877-validation-closure-02/report.html`
+  and `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/private-alpha-20260909/linkding/runs/linkding-03/report.html`.
+- First-use remains supervised: Linkding discovery needed provisioning/source
+  review, and both apps reused prepared dependencies. No clean-machine or
+  unattended-onboarding claim is supported by this exercise.
+- Source worktrees and historical reports are preserved. The dated worktree
+  statements below describe their original checkpoints, not current main status.
+- Full task status: `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/private-alpha-execution_current_state.md`.
+
+## State Preconditions Fail Closed - 2026-09-08
+
+- Active implementation worktree:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/.worktrees/qabot-state-prerequisites`,
+  branch `fix/state-prerequisites`.
+- Implemented the approved bounded V1 policy for explicit
+  `journey.preconditions.state`: any nonempty declared state list is treated as
+  unverifiable by the walker and blocks before browser actions or model calls.
+  This intentionally does not infer proof from reset commands or settings values.
+- Added focused walker coverage for empty state remaining allowed, nonempty state
+  blocking every step as `not_reached`, no driver/model calls, and redaction of
+  sensitive state text in blocked output. Root and independent GPT-5.5 each ran
+  the complete walker file: 57 passed. Scoped Ruff and diff checks passed. A
+  retained real-Chrome probe also verified BLOCKED, zero actions/model calls,
+  and playable report video. README, PRD, and walkthrough document the contract.
+- The same CLI worktree is running the separately authorized paired Langflow
+  validation with model-provider calls. PR14931 before and after both FAIL the
+  visible diagnostic assertion. PR14913 editor and Assistant each have before
+  FAIL / after PASS evidence, including real Watsonx responses. One after-editor
+  locator blocker was retained; a paired retry with explicit unscoped Add actions
+  passed all 15 unchanged observations. No driver fallback was added.
+  Evidence remains under the main checkout's
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/state-and-langflow-20260908/`.
+  No discovery generation change, commit, push, or upstream Langflow fix was made.
+- All six live CLI runs completed and owned app listeners stopped. The four
+  Langflow targets remain clean and the user's staged combined patch is unchanged.
+  Manual review index:
+  `/Users/jordan.frazier/Documents/frazier_projects/quabity-assuance/v1/reports/verification/state-and-langflow-20260908/verification.md`.
+  The implementation is uncommitted here, not integrated into main.
+
+
 ## Main Integration And State Resolution - 2026-09-08
 
 - Jordan merged PR #2 and pulled main. Current directory:
